@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   backend:
     build: ./backend
@@ -9,9 +7,13 @@ services:
     privileged: true
     devices:
       - /dev/bus/usb:/dev/bus/usb
+    volumes:
+      - ./backend/data:/app/data
     environment:
       - LMS_HOST=${LMS_HOST:-localhost}
       - LMS_PORT=${LMS_PORT:-9000}
+      - LMS_HTTPS=${LMS_HTTPS:-false}
+      - EXTERNAL_STREAM_URL=${EXTERNAL_STREAM_URL:-}
     # Ports exposed via host network:
     # - 8000: FastAPI backend
     # - 8089: Audio stream server

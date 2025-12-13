@@ -23,12 +23,17 @@ async def lifespan(app: FastAPI):
     # LMS configuration from environment or defaults
     lms_host = os.environ.get("LMS_HOST", "localhost")
     lms_port = int(os.environ.get("LMS_PORT", "9000"))
-    app.state.lms_service = LMSService(server_host=lms_host, server_port=lms_port)
+    lms_https = os.environ.get("LMS_HTTPS", "").lower() in ("true", "1", "yes")
+    app.state.lms_service = LMSService(server_host=lms_host, server_port=lms_port, use_https=lms_https)
+    
+    # External stream URL for Chromecast (HTTPS required)
+    external_stream_url = os.environ.get("EXTERNAL_STREAM_URL")
     
     app.state.playback_service = PlaybackService(
         tuner_service=app.state.tuner_service,
         chromecast_service=app.state.chromecast_service,
         lms_service=app.state.lms_service,
+        external_stream_url=external_stream_url,
     )
     
     # Start Chromecast discovery

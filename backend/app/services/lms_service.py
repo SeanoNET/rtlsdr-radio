@@ -25,17 +25,24 @@ class LMSPlayer:
 
 
 class LMSService:
-    def __init__(self, server_host: str = "localhost", server_port: int = 9000):
+    def __init__(self, server_host: str = "localhost", server_port: int = 9000, use_https: bool = False):
         self._server_host = server_host
         self._server_port = server_port
-        self._base_url = f"http://{server_host}:{server_port}/jsonrpc.js"
+        self._use_https = use_https
+        protocol = "https" if use_https else "http"
+        # Omit port for standard ports (80/443)
+        if (use_https and server_port == 443) or (not use_https and server_port == 80):
+            self._base_url = f"{protocol}://{server_host}/jsonrpc.js"
+        else:
+            self._base_url = f"{protocol}://{server_host}:{server_port}/jsonrpc.js"
         self._players: Dict[str, LMSPlayer] = {}
         self._session: Optional[aiohttp.ClientSession] = None
     
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session."""
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession()
+            # Disable cookie jar to prevent cookie accumulation issues with some reverse proxies
+            self._session = aiohttp.ClientSession(cookie_jar=aiohttp.DummyCookieJar())
         return self._session
     
     async def _request(self, player_id: str, command: List) -> Optional[dict]:

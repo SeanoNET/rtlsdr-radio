@@ -244,12 +244,23 @@ Environment variables can be set in a `.env` file or passed directly:
 |----------|---------|-------------|
 | `LMS_HOST` | `localhost` | Logitech Media Server hostname |
 | `LMS_PORT` | `9000` | LMS JSON-RPC port |
+| `LMS_HTTPS` | `false` | Use HTTPS for LMS connection |
+| `EXTERNAL_STREAM_URL` | _(none)_ | HTTPS URL for Chromecast streaming (required for Chromecast) |
 
 Example `.env` file:
 ```
 LMS_HOST=192.168.1.100
 LMS_PORT=9000
+LMS_HTTPS=false
+EXTERNAL_STREAM_URL=https://radio-stream.example.com/stream.mp3
 ```
+
+### Chromecast HTTPS Requirement
+
+Chromecast devices require HTTPS URLs for media playback. To use Chromecast:
+
+1. Set up a reverse proxy (Traefik, nginx, etc.) with SSL to proxy port 8089
+2. Set `EXTERNAL_STREAM_URL` to the HTTPS URL of your stream endpoint
 
 ### Ports
 

@@ -34,11 +34,13 @@ class PlaybackService:
         chromecast_service: ChromecastService,
         lms_service: LMSService,
         stream_port: int = 8089,
+        external_stream_url: str = None,
     ):
         self._tuner = tuner_service
         self._chromecast = chromecast_service
         self._lms = lms_service
         self._stream_port = stream_port
+        self._external_stream_url = external_stream_url
         
         self._state = PlaybackState.STOPPED
         self._current_device_id: Optional[str] = None
@@ -52,9 +54,16 @@ class PlaybackService:
     
     @property
     def stream_url(self) -> str:
-        """Get the URL where the audio stream is available."""
+        """Get the internal URL where the audio stream is available."""
         local_ip = get_local_ip()
         return f"http://{local_ip}:{self._stream_port}/stream.mp3"
+    
+    @property
+    def chromecast_stream_url(self) -> str:
+        """Get the URL for Chromecast (external HTTPS if configured, otherwise internal)."""
+        if self._external_stream_url:
+            return self._external_stream_url
+        return self.stream_url
     
     def get_status(self) -> PlaybackStatus:
         """Get current playback status."""
@@ -175,7 +184,9 @@ class PlaybackService:
             
             # Start casting based on device type
             if device_type == SpeakerType.CHROMECAST:
-                if not await self._chromecast.play_url(device_id, self.stream_url):
+                cast_url = self.chromecast_stream_url
+                logger.info(f"Casting to Chromecast using URL: {cast_url}")
+                if not await self._chromecast.play_url(device_id, cast_url):
                     logger.error("Failed to start Chromecast casting")
                     await self._tuner.stop()
                     self._state = PlaybackState.STOPPED

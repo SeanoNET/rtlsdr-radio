@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
+// Special ID for browser playback
+const BROWSER_SPEAKER_ID = "browser:local";
+
 export default function RadioApp() {
   const [speakers, setSpeakers] = useState([]);
   const [stations, setStations] = useState([]);
@@ -13,9 +16,17 @@ export default function RadioApp() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Browser audio playback
+  const [audioElement, setAudioElement] = useState(null);
+  const [browserPlaying, setBrowserPlaying] = useState(false);
+
   // New station form
   const [newStationName, setNewStationName] = useState("");
   const [newStationFreq, setNewStationFreq] = useState("");
+
+  // Transfer playback dialog
+  const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [pendingSpeakerChange, setPendingSpeakerChange] = useState(null);
 
   const fetchSpeakers = useCallback(async () => {
     try {
@@ -56,6 +67,10 @@ export default function RadioApp() {
     return () => clearInterval(interval);
   }, [fetchSpeakers, fetchStations, fetchPlaybackStatus]);
 
+  // Computed playback state - defined early so handlers can use them
+  const isPlaying = playbackStatus?.state === "playing" || browserPlaying;
+  const isPaused = playbackStatus?.state === "paused";
+
   const handlePlay = async () => {
     if (!selectedSpeaker) {
       setError("Please select a speaker");
@@ -66,6 +81,40 @@ export default function RadioApp() {
     setError(null);
 
     try {
+      // Browser playback - tune first, then play stream locally
+      if (selectedSpeaker === BROWSER_SPEAKER_ID) {
+        // First tune the radio - always use frequency (tuner doesn't support station_id)
+        const tuneFrequency = selectedStation
+          ? stations.find((s) => s.id === selectedStation)?.frequency ||
+            parseFloat(frequency)
+          : parseFloat(frequency);
+        const tuneBody = { frequency: tuneFrequency, modulation: "wfm" };
+
+        const tuneRes = await fetch(`${API_BASE}/tuner/tune`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(tuneBody),
+        });
+
+        if (!tuneRes.ok) {
+          const data = await tuneRes.json();
+          const detail =
+            typeof data.detail === "string"
+              ? data.detail
+              : JSON.stringify(data.detail) || "Failed to tune";
+          throw new Error(detail);
+        }
+
+        // Create audio element and play stream
+        const audio = new Audio(`${API_BASE}/stream`);
+        audio.volume = volume;
+        audio.play();
+        setAudioElement(audio);
+        setBrowserPlaying(true);
+        return;
+      }
+
+      // External speaker playback
       const body = {
         device_id: selectedSpeaker,
         ...(selectedStation
@@ -81,7 +130,11 @@ export default function RadioApp() {
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.detail || "Failed to start playback");
+        const detail =
+          typeof data.detail === "string"
+            ? data.detail
+            : JSON.stringify(data.detail) || "Failed to start playback";
+        throw new Error(detail);
       }
 
       await fetchPlaybackStatus();
@@ -95,7 +148,16 @@ export default function RadioApp() {
   const handleStop = async () => {
     setLoading(true);
     try {
+      // Stop browser audio if playing
+      if (audioElement) {
+        audioElement.pause();
+        audioElement.src = "";
+        setAudioElement(null);
+        setBrowserPlaying(false);
+      }
+
       await fetch(`${API_BASE}/playback/stop`, { method: "POST" });
+      await fetch(`${API_BASE}/tuner/stop`, { method: "POST" });
       await fetchPlaybackStatus();
     } catch (err) {
       setError("Failed to stop playback");
@@ -124,7 +186,14 @@ export default function RadioApp() {
 
   const handleVolumeChange = async (newVolume) => {
     setVolume(newVolume);
-    if (selectedSpeaker) {
+
+    // Browser audio volume
+    if (audioElement) {
+      audioElement.volume = newVolume;
+    }
+
+    // External speaker volume
+    if (selectedSpeaker && selectedSpeaker !== BROWSER_SPEAKER_ID) {
       try {
         await fetch(`${API_BASE}/speakers/${selectedSpeaker}/volume`, {
           method: "PUT",
@@ -174,6 +243,69 @@ export default function RadioApp() {
     }
   };
 
+  const handlePowerToggle = async (speakerId, powerOn) => {
+    try {
+      const res = await fetch(
+        `${API_BASE}/speakers/${speakerId}/power?power=${powerOn}`,
+        {
+          method: "POST",
+        },
+      );
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || "Failed to toggle power");
+      }
+      await fetchSpeakers();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleSpeakerSelect = (speakerId) => {
+    // If currently playing and selecting a different speaker, prompt for transfer
+    if (
+      (isPlaying || isPaused) &&
+      selectedSpeaker &&
+      selectedSpeaker !== speakerId
+    ) {
+      setPendingSpeakerChange(speakerId);
+      setShowTransferDialog(true);
+    } else {
+      setSelectedSpeaker(speakerId);
+    }
+  };
+
+  const handleTransferConfirm = async () => {
+    setShowTransferDialog(false);
+    const newSpeakerId = pendingSpeakerChange;
+    setPendingSpeakerChange(null);
+
+    // Stop current playback
+    await handleStop();
+
+    // Select new speaker
+    setSelectedSpeaker(newSpeakerId);
+
+    // If we have a frequency or station selected, start playback on new speaker
+    if (frequency || selectedStation) {
+      // Small delay to let state update
+      setTimeout(() => {
+        handlePlay();
+      }, 100);
+    }
+  };
+
+  const handleTransferCancel = () => {
+    setShowTransferDialog(false);
+    setPendingSpeakerChange(null);
+  };
+
+  const handleSwitchWithoutTransfer = () => {
+    setShowTransferDialog(false);
+    setSelectedSpeaker(pendingSpeakerChange);
+    setPendingSpeakerChange(null);
+  };
+
   const getSpeakerIcon = (type) => {
     return type === "chromecast" ? "📺" : "🔊";
   };
@@ -181,9 +313,6 @@ export default function RadioApp() {
   const getSpeakerTypeLabel = (type) => {
     return type === "chromecast" ? "Chromecast" : "Squeezebox";
   };
-
-  const isPlaying = playbackStatus?.state === "playing";
-  const isPaused = playbackStatus?.state === "paused";
 
   // Group speakers by type
   const chromecastSpeakers = speakers.filter((s) => s.type === "chromecast");
@@ -254,85 +383,132 @@ export default function RadioApp() {
             </button>
           </h2>
 
-          {speakers.length === 0 ? (
-            <p className="text-slate-400">
-              No speakers found. Make sure Chromecast or LMS devices are on the
-              network.
-            </p>
-          ) : (
-            <div className="space-y-4">
-              {/* Chromecast Speakers */}
-              {chromecastSpeakers.length > 0 && (
-                <div>
-                  <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">
-                    Chromecast
-                  </p>
-                  <div className="grid gap-2">
-                    {chromecastSpeakers.map((speaker) => (
-                      <button
-                        key={speaker.id}
-                        onClick={() => setSelectedSpeaker(speaker.id)}
-                        className={`p-4 rounded-lg text-left transition-all ${
-                          selectedSpeaker === speaker.id
-                            ? "bg-purple-600 border-purple-400"
-                            : "bg-white/5 hover:bg-white/10 border-transparent"
-                        } border`}
-                      >
-                        <p className="font-medium">
-                          {getSpeakerIcon(speaker.type)} {speaker.name}
-                        </p>
-                        <p className="text-sm text-slate-400">
-                          {speaker.model} • {speaker.ip_address}
-                        </p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* LMS/Squeezebox Speakers */}
-              {lmsSpeakers.length > 0 && (
-                <div>
-                  <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">
-                    Squeezebox / LMS
-                  </p>
-                  <div className="grid gap-2">
-                    {lmsSpeakers.map((speaker) => (
-                      <button
-                        key={speaker.id}
-                        onClick={() => setSelectedSpeaker(speaker.id)}
-                        className={`p-4 rounded-lg text-left transition-all ${
-                          selectedSpeaker === speaker.id
-                            ? "bg-purple-600 border-purple-400"
-                            : "bg-white/5 hover:bg-white/10 border-transparent"
-                        } border`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-medium">
-                              {getSpeakerIcon(speaker.type)} {speaker.name}
-                            </p>
-                            <p className="text-sm text-slate-400">
-                              {speaker.model} • {speaker.ip_address}
-                            </p>
-                          </div>
-                          <span
-                            className={`text-xs px-2 py-1 rounded ${
-                              speaker.is_available
-                                ? "bg-green-500/20 text-green-400"
-                                : "bg-slate-500/20 text-slate-400"
-                            }`}
-                          >
-                            {speaker.is_available ? "Online" : "Offline"}
-                          </span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+          <div className="space-y-4">
+            {/* Browser Playback Option */}
+            <div>
+              <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">
+                This Browser
+              </p>
+              <button
+                onClick={() => handleSpeakerSelect(BROWSER_SPEAKER_ID)}
+                className={`w-full p-4 rounded-lg text-left transition-all ${
+                  selectedSpeaker === BROWSER_SPEAKER_ID
+                    ? "bg-purple-600 border-purple-400"
+                    : "bg-white/5 hover:bg-white/10 border-transparent"
+                } border`}
+              >
+                <p className="font-medium">🎧 Browser Audio</p>
+                <p className="text-sm text-slate-400">
+                  Listen directly in this browser
+                </p>
+              </button>
             </div>
-          )}
+
+            {speakers.length === 0 ? (
+              <p className="text-slate-400">
+                No external speakers found. You can still listen in browser.
+              </p>
+            ) : (
+              <>
+                {/* Chromecast Speakers */}
+                {chromecastSpeakers.length > 0 && (
+                  <div>
+                    <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">
+                      Chromecast
+                    </p>
+                    <div className="grid gap-2">
+                      {chromecastSpeakers.map((speaker) => (
+                        <button
+                          key={speaker.id}
+                          onClick={() => handleSpeakerSelect(speaker.id)}
+                          className={`p-4 rounded-lg text-left transition-all ${
+                            selectedSpeaker === speaker.id
+                              ? "bg-purple-600 border-purple-400"
+                              : "bg-white/5 hover:bg-white/10 border-transparent"
+                          } border`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium">
+                                {getSpeakerIcon(speaker.type)} {speaker.name}
+                              </p>
+                              <p className="text-sm text-slate-400">
+                                {speaker.model} • {speaker.ip_address}
+                              </p>
+                            </div>
+                            {speaker.is_available && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handlePowerToggle(speaker.id, false);
+                                }}
+                                className="text-xs px-2 py-1 rounded transition-all bg-red-500/20 text-red-400 hover:bg-red-500/40"
+                                title="Stop casting"
+                              >
+                                ⏹ Stop
+                              </button>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* LMS/Squeezebox Speakers */}
+                {lmsSpeakers.length > 0 && (
+                  <div>
+                    <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">
+                      Squeezebox / LMS
+                    </p>
+                    <div className="grid gap-2">
+                      {lmsSpeakers.map((speaker) => (
+                        <button
+                          key={speaker.id}
+                          onClick={() => handleSpeakerSelect(speaker.id)}
+                          className={`p-4 rounded-lg text-left transition-all ${
+                            selectedSpeaker === speaker.id
+                              ? "bg-purple-600 border-purple-400"
+                              : "bg-white/5 hover:bg-white/10 border-transparent"
+                          } border`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium">
+                                {getSpeakerIcon(speaker.type)} {speaker.name}
+                              </p>
+                              <p className="text-sm text-slate-400">
+                                {speaker.model} • {speaker.ip_address}
+                              </p>
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePowerToggle(
+                                  speaker.id,
+                                  !speaker.is_available,
+                                );
+                              }}
+                              className={`text-xs px-2 py-1 rounded transition-all ${
+                                speaker.is_available
+                                  ? "bg-green-500/20 text-green-400 hover:bg-green-500/40"
+                                  : "bg-slate-500/20 text-slate-400 hover:bg-slate-500/40"
+                              }`}
+                              title={
+                                speaker.is_available ? "Power off" : "Power on"
+                              }
+                            >
+                              ⏻ {speaker.is_available ? "On" : "Standby"}
+                            </button>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
 
         {/* Volume Control */}
@@ -550,6 +726,39 @@ export default function RadioApp() {
           )}
         </div>
       </div>
+
+      {/* Transfer Playback Dialog */}
+      {showTransferDialog && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-slate-800 rounded-xl p-6 max-w-md mx-4 border border-white/10 shadow-2xl">
+            <h3 className="text-xl font-semibold mb-4">Transfer Playback?</h3>
+            <p className="text-slate-300 mb-6">
+              Music is currently playing. Would you like to transfer playback to
+              the new speaker?
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={handleTransferConfirm}
+                className="w-full bg-purple-600 hover:bg-purple-500 rounded-lg px-4 py-3 font-medium transition-all"
+              >
+                Transfer Playback
+              </button>
+              <button
+                onClick={handleSwitchWithoutTransfer}
+                className="w-full bg-white/10 hover:bg-white/20 rounded-lg px-4 py-3 font-medium transition-all"
+              >
+                Switch Speaker Only
+              </button>
+              <button
+                onClick={handleTransferCancel}
+                className="w-full text-slate-400 hover:text-white py-2 transition-all"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
