@@ -31,6 +31,7 @@ See [Docker Deployment](#docker-deployment) for details.
 
 - **Chromecast** - Audio/video Chromecast devices, Google Home speakers
 - **LMS/Squeezebox** - Logitech Media Server players (piCorePlayer, Squeezelite, hardware Squeezeboxes)
+- **Home Assistant** - Custom integration with full media player support
 
 ## Prerequisites
 
@@ -92,6 +93,99 @@ npm run dev
 ```
 
 Frontend will be available at `http://localhost:5173`.
+
+## Home Assistant Integration
+
+RTL-SDR Radio includes a custom Home Assistant integration that provides a full media player entity.
+
+### Features
+
+- **Media Player Entity**: Full media player controls in Home Assistant
+- **Play/Pause/Stop**: Control playback from HA or automations
+- **Source Selection**: Station presets appear as selectable sources
+- **Volume Control**: Adjust volume through Home Assistant
+- **State Sync**: Real-time state updates (playing, paused, idle)
+- **Attributes**: Frequency, modulation, device info exposed as attributes
+
+### Installation via HACS (Recommended)
+
+1. Open HACS in Home Assistant
+2. Click the three dots menu → **Custom repositories**
+3. Add this repository URL: `https://github.com/YOUR_USERNAME/rtlsdr-radio`
+4. Select category: **Integration**
+5. Click **Add**
+6. Search for "RTL-SDR Radio" and install
+7. Restart Home Assistant
+8. Go to **Settings → Devices & Services → Add Integration**
+9. Search for "RTL-SDR Radio"
+10. Enter your RTL-SDR Radio server host and port (default: 8000)
+
+### Manual Installation
+
+1. Copy the `custom_components/rtlsdr_radio` folder to your Home Assistant's `custom_components` directory
+2. Restart Home Assistant
+3. Go to **Settings → Devices & Services → Add Integration**
+4. Search for "RTL-SDR Radio"
+5. Enter your RTL-SDR Radio server host and port
+
+### Configuration
+
+When adding the integration, you'll be prompted for:
+
+| Field | Description |
+|-------|-------------|
+| Host | IP or hostname of the RTL-SDR Radio server |
+| Port | API port (default: 8000) |
+
+### Home Assistant Automations
+
+Example automation to play a station:
+
+```yaml
+automation:
+  - alias: "Play morning radio"
+    trigger:
+      - platform: time
+        at: "07:00:00"
+    action:
+      - service: media_player.select_source
+        target:
+          entity_id: media_player.rtlsdr_radio
+        data:
+          source: "Triple J"
+```
+
+Example automation to stop radio when leaving:
+
+```yaml
+automation:
+  - alias: "Stop radio when leaving"
+    trigger:
+      - platform: state
+        entity_id: person.you
+        to: "not_home"
+    action:
+      - service: media_player.media_stop
+        target:
+          entity_id: media_player.rtlsdr_radio
+```
+
+### Entity Attributes
+
+The media player entity exposes these attributes:
+
+| Attribute | Description |
+|-----------|-------------|
+| `frequency` | Current FM frequency (MHz) |
+| `modulation` | Modulation type (wfm) |
+| `device_id` | Active speaker ID |
+| `device_name` | Active speaker name |
+| `device_type` | Speaker type (chromecast/lms) |
+| `available_speakers` | List of available speakers |
+
+### Music Assistant
+
+Once the media player is in Home Assistant, it will also be accessible in Music Assistant as a playback target.
 
 ## API Reference
 
@@ -334,6 +428,11 @@ sudo systemctl start rtlsdr-radio
 - Verify the RTL-SDR Radio server is reachable from LMS player network
 - Check firewall allows port 8089 (stream server)
 - Test stream URL directly: `curl http://your-server:8089/stream.mp3`
+
+### Home Assistant integration not connecting
+- Verify the RTL-SDR Radio server is reachable from Home Assistant
+- Check that port 8000 is accessible
+- Test the health endpoint: `curl http://your-server:8000/api/health`
 
 ## License
 

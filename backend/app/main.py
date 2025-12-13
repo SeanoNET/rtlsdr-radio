@@ -1,16 +1,18 @@
 """
 RTL-SDR Chromecast Radio - Main FastAPI Application
 """
+
+import os
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-import os
 
-from app.routers import devices, stations, tuner, playback, stream, speakers
+from app.routers import devices, playback, speakers, stations, stream, tuner
 from app.services.chromecast_service import ChromecastService
 from app.services.lms_service import LMSService
-from app.services.tuner_service import TunerService
 from app.services.playback_service import PlaybackService
+from app.services.tuner_service import TunerService
 
 
 @asynccontextmanager
@@ -19,31 +21,33 @@ async def lifespan(app: FastAPI):
     # Startup
     app.state.chromecast_service = ChromecastService()
     app.state.tuner_service = TunerService()
-    
+
     # LMS configuration from environment or defaults
     lms_host = os.environ.get("LMS_HOST", "localhost")
     lms_port = int(os.environ.get("LMS_PORT", "9000"))
     lms_https = os.environ.get("LMS_HTTPS", "").lower() in ("true", "1", "yes")
-    app.state.lms_service = LMSService(server_host=lms_host, server_port=lms_port, use_https=lms_https)
-    
+    app.state.lms_service = LMSService(
+        server_host=lms_host, server_port=lms_port, use_https=lms_https
+    )
+
     # External stream URL for Chromecast (HTTPS required)
     external_stream_url = os.environ.get("EXTERNAL_STREAM_URL")
-    
+
     app.state.playback_service = PlaybackService(
         tuner_service=app.state.tuner_service,
         chromecast_service=app.state.chromecast_service,
         lms_service=app.state.lms_service,
         external_stream_url=external_stream_url,
     )
-    
+
     # Start Chromecast discovery
     await app.state.chromecast_service.start_discovery()
-    
+
     # Discover LMS players
     await app.state.lms_service.discover_players()
-    
+
     yield
-    
+
     # Shutdown
     await app.state.playback_service.stop()
     await app.state.chromecast_service.stop_discovery()

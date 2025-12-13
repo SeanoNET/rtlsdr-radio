@@ -1,0 +1,13 @@
+{
+  "domain": "rtlsdr_radio",
+  "name": "RTL-SDR Radio",
+  "codeowners": ["@seano"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/seano/rtlsdr-radio",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/seano/rtlsdr-radio/issues",
+  "requirements": ["aiohttp>=3.9.0"],
+  "version": "1.0.0"
+}
