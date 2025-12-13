@@ -1,0 +1,22 @@
+http:
+  routers:
+    rtlsdr-radio-dev:
+      entryPoints:
+        - https
+      rule: "Host(`radio-dev.local.seanonet.dev`)"
+      service: rtlsdr-radio-dev
+    rtlsdr-stream-dev:
+      entryPoints:
+        - https
+      rule: "Host(`radio-stream-dev.local.seanonet.dev`)"
+      service: rtlsdr-stream-dev
+
+  services:
+    rtlsdr-radio-dev:
+      loadBalancer:
+        servers:
+          - url: http://10.0.0.60:80
+    rtlsdr-stream-dev:
+      loadBalancer:
+        servers:
+          - url: http://10.0.0.60:8089
