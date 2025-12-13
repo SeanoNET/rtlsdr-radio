@@ -1,0 +1,27 @@
+services:
+  backend:
+    build: ./backend
+    container_name: rtlsdr-backend
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+    volumes:
+      - ./backend/data:/app/data
+    environment:
+      - LMS_HOST=${LMS_HOST:-localhost}
+      - LMS_PORT=${LMS_PORT:-9000}
+      - LMS_HTTPS=${LMS_HTTPS:-false}
+      - EXTERNAL_STREAM_URL=${EXTERNAL_STREAM_URL:-}
+    ports:
+      - "8000:8000"
+      - "8089:8089"
+
+  frontend:
+    build: ./frontend
+    container_name: rtlsdr-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
