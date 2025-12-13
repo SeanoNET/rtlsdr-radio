@@ -96,6 +96,8 @@ Frontend will be available at `http://localhost:5173`.
 
 ## Home Assistant Integration
 
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=SeanoNET&repository=rtlsdr-radio&category=integration)
+
 RTL-SDR Radio includes a custom Home Assistant integration that provides a full media player entity.
 
 ### Features
@@ -109,16 +111,16 @@ RTL-SDR Radio includes a custom Home Assistant integration that provides a full 
 
 ### Installation via HACS (Recommended)
 
-1. Open HACS in Home Assistant
-2. Click the three dots menu → **Custom repositories**
-3. Add this repository URL: `https://github.com/YOUR_USERNAME/rtlsdr-radio`
-4. Select category: **Integration**
-5. Click **Add**
-6. Search for "RTL-SDR Radio" and install
-7. Restart Home Assistant
-8. Go to **Settings → Devices & Services → Add Integration**
-9. Search for "RTL-SDR Radio"
-10. Enter your RTL-SDR Radio server host and port (default: 8000)
+1. Click the badge above, or:
+   - Open HACS in Home Assistant
+   - Click the three dots menu → **Custom repositories**
+   - Add: `https://github.com/SeanoNET/rtlsdr-radio`
+   - Category: **Integration**
+2. Search for "RTL-SDR Radio" and install
+3. Restart Home Assistant
+4. Go to **Settings → Devices & Services → Add Integration**
+5. Search for "RTL-SDR Radio"
+6. Enter your RTL-SDR Radio server host and port (default: 8000)
 
 ### Manual Installation
 
