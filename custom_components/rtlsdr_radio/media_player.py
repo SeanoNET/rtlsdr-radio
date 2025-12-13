@@ -36,21 +36,33 @@ async def async_setup_entry(
     """Set up RTL-SDR Radio media player from a config entry."""
     coordinator: RTLSDRRadioCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-    # Wait for first refresh to get speakers
-    await coordinator.async_config_entry_first_refresh()
+    # Track which speakers we've created entities for
+    tracked_speakers: set[str] = set()
 
-    # Create a media player entity for each speaker
-    entities = []
-    speakers = coordinator.data.get("speakers", []) if coordinator.data else []
+    @callback
+    def async_add_speaker_entities() -> None:
+        """Add entities for any new speakers."""
+        if not coordinator.data:
+            return
 
-    for speaker in speakers:
-        entities.append(RTLSDRRadioMediaPlayer(coordinator, entry, speaker))
+        speakers = coordinator.data.get("speakers", [])
+        new_entities = []
 
-    # If no speakers found, create a default entity
-    if not entities:
-        entities.append(RTLSDRRadioMediaPlayer(coordinator, entry, None))
+        for speaker in speakers:
+            speaker_id = speaker["id"]
+            if speaker_id not in tracked_speakers:
+                tracked_speakers.add(speaker_id)
+                new_entities.append(RTLSDRRadioMediaPlayer(coordinator, entry, speaker))
+                _LOGGER.debug("Adding new speaker entity: %s", speaker["name"])
 
-    async_add_entities(entities)
+        if new_entities:
+            async_add_entities(new_entities)
+
+    # Add initial entities
+    async_add_speaker_entities()
+
+    # Listen for coordinator updates to add new speakers
+    entry.async_on_unload(coordinator.async_add_listener(async_add_speaker_entities))
 
 
 class RTLSDRRadioMediaPlayer(
@@ -65,31 +77,22 @@ class RTLSDRRadioMediaPlayer(
         self,
         coordinator: RTLSDRRadioCoordinator,
         entry: ConfigEntry,
-        speaker: dict | None,
+        speaker: dict,
     ) -> None:
         """Initialize the media player."""
         super().__init__(coordinator)
         self._entry = entry
-        self._speaker = speaker
+        self._speaker_id = speaker["id"]
+        self._speaker_name = speaker["name"]
+        self._speaker_type = speaker.get("type", "unknown")
+        self._attr_unique_id = f"{entry.entry_id}_{speaker['id']}"
+        self._attr_name = speaker["name"]
 
-        if speaker:
-            self._speaker_id = speaker["id"]
-            self._speaker_name = speaker["name"]
-            self._speaker_type = speaker.get("type", "unknown")
-            self._attr_unique_id = f"{entry.entry_id}_{speaker['id']}"
-            self._attr_name = speaker["name"]
-
-            # Set icon based on speaker type
-            if self._speaker_type == "chromecast":
-                self._attr_icon = "mdi:cast-audio"
-            elif self._speaker_type == "lms":
-                self._attr_icon = "mdi:speaker"
-        else:
-            self._speaker_id = None
-            self._speaker_name = "RTL-SDR Radio"
-            self._speaker_type = None
-            self._attr_unique_id = f"{entry.entry_id}_player"
-            self._attr_name = None
+        # Set icon based on speaker type
+        if self._speaker_type == "chromecast":
+            self._attr_icon = "mdi:cast-audio"
+        elif self._speaker_type == "lms":
+            self._attr_icon = "mdi:speaker"
 
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
@@ -98,6 +101,16 @@ class RTLSDRRadioMediaPlayer(
             "model": "FM Radio Receiver",
             "sw_version": "1.0.0",
         }
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        if not self.coordinator.data:
+            return False
+
+        # Check if this speaker still exists
+        speakers = self.coordinator.data.get("speakers", [])
+        return any(s["id"] == self._speaker_id for s in speakers)
 
     @property
     def supported_features(self) -> MediaPlayerEntityFeature:
@@ -113,7 +126,7 @@ class RTLSDRRadioMediaPlayer(
     @property
     def state(self) -> MediaPlayerState:
         """Return the state of the player."""
-        if not self.coordinator.data or not self._speaker_id:
+        if not self.coordinator.data:
             return MediaPlayerState.IDLE
 
         playback = self.coordinator.data.get("playback", {})
@@ -129,7 +142,7 @@ class RTLSDRRadioMediaPlayer(
     @property
     def volume_level(self) -> float | None:
         """Return the volume level."""
-        if not self.coordinator.data or not self._speaker_id:
+        if not self.coordinator.data:
             return None
 
         speakers = self.coordinator.data.get("speakers", [])
@@ -202,8 +215,8 @@ class RTLSDRRadioMediaPlayer(
 
     async def async_select_source(self, source: str) -> None:
         """Select a source (station) to play on this speaker."""
-        if not self.coordinator.data or not self._speaker_id:
-            _LOGGER.error("No speaker available for playback")
+        if not self.coordinator.data:
+            _LOGGER.error("No data available")
             return
 
         stations = self.coordinator.data.get("stations", [])
@@ -239,9 +252,8 @@ class RTLSDRRadioMediaPlayer(
 
     async def async_set_volume_level(self, volume: float) -> None:
         """Set volume level."""
-        if self._speaker_id:
-            await self.coordinator.async_set_volume(self._speaker_id, volume)
-            await self.coordinator.async_request_refresh()
+        await self.coordinator.async_set_volume(self._speaker_id, volume)
+        await self.coordinator.async_request_refresh()
 
     @callback
     def _handle_coordinator_update(self) -> None:
