@@ -1,0 +1,32 @@
+services:
+  backend:
+    image: ghcr.io/seanonet/rtlsdr-radio-backend:latest
+    container_name: rtlsdr-backend
+    restart: unless-stopped
+    network_mode: host
+    privileged: true
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+    volumes:
+      - rtlsdr-data:/app/data
+    environment:
+      - LMS_HOST=${LMS_HOST:-localhost}
+      - LMS_PORT=${LMS_PORT:-9000}
+      - LMS_HTTPS=${LMS_HTTPS:-false}
+      - EXTERNAL_STREAM_URL=${EXTERNAL_STREAM_URL:-}
+    # Ports exposed via host network:
+    # - 8000: FastAPI backend
+    # - 8089: Audio stream server
+
+  frontend:
+    image: ghcr.io/seanonet/rtlsdr-radio-frontend:latest
+    container_name: rtlsdr-frontend
+    restart: unless-stopped
+    network_mode: host
+    depends_on:
+      - backend
+    # Port exposed via host network:
+    # - 80: Nginx serving frontend + proxying API
+
+volumes:
+  rtlsdr-data:
