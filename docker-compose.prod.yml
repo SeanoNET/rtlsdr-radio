@@ -3,7 +3,6 @@ services:
     image: ghcr.io/seanonet/rtlsdr-radio-backend:latest
     container_name: rtlsdr-backend
     restart: unless-stopped
-    network_mode: host
     privileged: true
     devices:
       - /dev/bus/usb:/dev/bus/usb
@@ -14,19 +13,50 @@ services:
       - LMS_PORT=${LMS_PORT:-9000}
       - LMS_HTTPS=${LMS_HTTPS:-false}
       - EXTERNAL_STREAM_URL=${EXTERNAL_STREAM_URL:-}
-    # Ports exposed via host network:
-    # - 8000: FastAPI backend
-    # - 8089: Audio stream server
+    networks:
+      - traefik
+    labels:
+      # Enable Traefik
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+
+      # API Router
+      - "traefik.http.routers.rtlsdr-api.rule=Host(`radio.local.seanonet.dev`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.rtlsdr-api.entrypoints=https"
+      - "traefik.http.routers.rtlsdr-api.tls=true"
+      - "traefik.http.routers.rtlsdr-api.service=rtlsdr-api"
+      - "traefik.http.services.rtlsdr-api.loadbalancer.server.port=8000"
+
+      # Stream Router (for Chromecast)
+      - "traefik.http.routers.rtlsdr-stream.rule=Host(`radio-stream.local.seanonet.dev`)"
+      - "traefik.http.routers.rtlsdr-stream.entrypoints=https"
+      - "traefik.http.routers.rtlsdr-stream.tls=true"
+      - "traefik.http.routers.rtlsdr-stream.service=rtlsdr-stream"
+      - "traefik.http.services.rtlsdr-stream.loadbalancer.server.port=8089"
 
   frontend:
     image: ghcr.io/seanonet/rtlsdr-radio-frontend:latest
     container_name: rtlsdr-frontend
     restart: unless-stopped
-    network_mode: host
     depends_on:
       - backend
-    # Port exposed via host network:
-    # - 80: Nginx serving frontend + proxying API
+    networks:
+      - traefik
+    labels:
+      # Enable Traefik
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+
+      # Frontend Router
+      - "traefik.http.routers.rtlsdr.rule=Host(`radio.local.seanonet.dev`)"
+      - "traefik.http.routers.rtlsdr.entrypoints=https"
+      - "traefik.http.routers.rtlsdr.tls=true"
+      - "traefik.http.routers.rtlsdr.service=rtlsdr"
+      - "traefik.http.services.rtlsdr.loadbalancer.server.port=80"
+
+networks:
+  traefik:
+    external: true
 
 volumes:
   rtlsdr-data:
