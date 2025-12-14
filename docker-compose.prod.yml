@@ -11,8 +11,8 @@ services:
     environment:
       - EXTERNAL_STREAM_URL=${EXTERNAL_STREAM_URL:-}
     ports:
-      - "127.0.0.1:8001:8000" # Local only for Music Assistant (8001->8000)
-      - "127.0.0.1:8090:8089" # Stream port for local access (8090->8089)
+      - "127.0.0.1:18000:8000" # Local only for Music Assistant
+      - "127.0.0.1:18089:8089" # Stream port for local access
     networks:
       - proxy
     labels:
