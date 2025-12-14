@@ -58,11 +58,22 @@ class ChromecastService:
     async def stop_discovery(self):
         """Stop Chromecast discovery."""
         if self._browser:
-            self._browser[1].stop_discovery()
+            try:
+                # _browser is a tuple (chromecasts, browser) from get_chromecasts()
+                if isinstance(self._browser, tuple) and len(self._browser) > 1:
+                    self._browser[1].stop_discovery()
+                elif hasattr(self._browser, "stop_discovery"):
+                    self._browser.stop_discovery()
+            except Exception as e:
+                logger.warning(f"Error stopping discovery: {e}")
+            self._browser = None
 
         # Disconnect all devices
         for cast in self._devices.values():
-            cast.disconnect()
+            try:
+                cast.disconnect()
+            except Exception as e:
+                logger.warning(f"Error disconnecting cast: {e}")
 
         self._devices.clear()
         logger.info("Chromecast discovery stopped")
