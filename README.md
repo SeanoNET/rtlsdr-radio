@@ -181,7 +181,3 @@ sudo udevadm control --reload-rules
 
 - Ensure devices are on the same network
 - Check firewall allows mDNS (port 5353 UDP)
-
-## License
-
-MIT
