@@ -1,7 +1,7 @@
 # Custom Music Assistant Server with RTL-SDR Radio Provider
 # This image extends the official MA server and adds our custom provider
 
-ARG MA_VERSION=latest
+ARG MA_VERSION=beta
 FROM ghcr.io/music-assistant/server:${MA_VERSION}
 
 # Copy the RTL-SDR Radio provider to the actual providers location
