@@ -1,6 +1,6 @@
 # RTL-SDR Radio
 
-Stream FM/AM radio from an RTL-SDR dongle to Chromecast speakers or Squeezelite players via Music Assistant.
+Stream FM/AM radio from an [RTL-SDR](https://www.rtl-sdr.com/about-rtl-sdr/) dongle to Chromecast speakers or Squeezelite players via Music Assistant.
 
 ![Radio Stations in Music Assistant](docs/radio.png)
 
