@@ -1,5 +1,5 @@
 """
-Playback service - orchestrates tuning and streaming to Chromecast or LMS.
+Playback service - orchestrates tuning and streaming to Chromecast.
 """
 
 import asyncio
@@ -9,9 +9,8 @@ from typing import Optional
 
 from aiohttp import web
 
-from app.models import Modulation, PlaybackState, PlaybackStatus, SpeakerType
+from app.models import Modulation, PlaybackState, PlaybackStatus
 from app.services.chromecast_service import ChromecastService
-from app.services.lms_service import LMSService
 from app.services.tuner_service import TunerService
 
 logger = logging.getLogger(__name__)
@@ -34,19 +33,16 @@ class PlaybackService:
         self,
         tuner_service: TunerService,
         chromecast_service: ChromecastService,
-        lms_service: LMSService,
         stream_port: int = 8089,
         external_stream_url: str = None,
     ):
         self._tuner = tuner_service
         self._chromecast = chromecast_service
-        self._lms = lms_service
         self._stream_port = stream_port
         self._external_stream_url = external_stream_url
 
         self._state = PlaybackState.STOPPED
         self._current_device_id: Optional[str] = None
-        self._current_device_type: Optional[SpeakerType] = None
         self._stream_server: Optional[web.AppRunner] = None
         self._lock = asyncio.Lock()
 
@@ -72,20 +68,14 @@ class PlaybackService:
         tuner_status = self._tuner.get_status()
         device_name = None
 
-        if self._current_device_id and self._current_device_type:
-            if self._current_device_type == SpeakerType.CHROMECAST:
-                device_info = self._chromecast.get_device_info(self._current_device_id)
-                if device_info:
-                    device_name = device_info.name
-            else:
-                player = self._lms.get_player(self._current_device_id)
-                if player:
-                    device_name = player.name
+        if self._current_device_id:
+            device_info = self._chromecast.get_device_info(self._current_device_id)
+            if device_info:
+                device_name = device_info.name
 
         return PlaybackStatus(
             state=self._state,
             device_id=self._current_device_id,
-            device_type=self._current_device_type,
             device_name=device_name,
             frequency=tuner_status.frequency,
             modulation=tuner_status.modulation,
@@ -119,7 +109,7 @@ class PlaybackService:
             logger.info("Stream server stopped")
 
     async def _handle_stream_request(self, request: web.Request) -> web.StreamResponse:
-        """Handle incoming stream requests from Chromecast or LMS."""
+        """Handle incoming stream requests from Chromecast."""
         logger.info(f"Stream request from {request.remote}")
 
         response = web.StreamResponse(
@@ -152,27 +142,20 @@ class PlaybackService:
     async def start(
         self,
         device_id: str,
-        device_type: SpeakerType,
         frequency: float,
         modulation: Modulation = Modulation.WFM,
     ) -> bool:
-        """Start playback: tune and cast to device."""
+        """Start playback: tune and cast to Chromecast device."""
         async with self._lock:
             logger.info(
-                f"Starting playback: {frequency} MHz to {device_type.value} device {device_id}"
+                f"Starting playback: {frequency} MHz to Chromecast device {device_id}"
             )
 
             # Verify device exists
-            if device_type == SpeakerType.CHROMECAST:
-                device = self._chromecast.get_device(device_id)
-                if not device:
-                    logger.error(f"Chromecast device not found: {device_id}")
-                    return False
-            else:
-                device = self._lms.get_player(device_id)
-                if not device:
-                    logger.error(f"LMS player not found: {device_id}")
-                    return False
+            device = self._chromecast.get_device(device_id)
+            if not device:
+                logger.error(f"Chromecast device not found: {device_id}")
+                return False
 
             self._state = PlaybackState.BUFFERING
 
@@ -188,26 +171,16 @@ class PlaybackService:
             # Give the tuner a moment to buffer
             await asyncio.sleep(1)
 
-            # Start casting based on device type
-            if device_type == SpeakerType.CHROMECAST:
-                cast_url = self.chromecast_stream_url
-                logger.info(f"Casting to Chromecast using URL: {cast_url}")
-                if not await self._chromecast.play_url(device_id, cast_url):
-                    logger.error("Failed to start Chromecast casting")
-                    await self._tuner.stop()
-                    self._state = PlaybackState.STOPPED
-                    return False
-            else:
-                if not await self._lms.play_url(
-                    device_id, self.stream_url, "RTL-SDR Radio"
-                ):
-                    logger.error("Failed to start LMS playback")
-                    await self._tuner.stop()
-                    self._state = PlaybackState.STOPPED
-                    return False
+            # Start casting
+            cast_url = self.chromecast_stream_url
+            logger.info(f"Casting to Chromecast using URL: {cast_url}")
+            if not await self._chromecast.play_url(device_id, cast_url):
+                logger.error("Failed to start Chromecast casting")
+                await self._tuner.stop()
+                self._state = PlaybackState.STOPPED
+                return False
 
             self._current_device_id = device_id
-            self._current_device_type = device_type
             self._state = PlaybackState.PLAYING
 
             device_name = device.name if hasattr(device, "name") else device_id
@@ -220,11 +193,8 @@ class PlaybackService:
             logger.info("Stopping playback")
 
             # Stop device playback
-            if self._current_device_id and self._current_device_type:
-                if self._current_device_type == SpeakerType.CHROMECAST:
-                    await self._chromecast.stop_playback(self._current_device_id)
-                else:
-                    await self._lms.stop(self._current_device_id)
+            if self._current_device_id:
+                await self._chromecast.stop_playback(self._current_device_id)
 
             # Stop tuner
             await self._tuner.stop()
@@ -234,7 +204,6 @@ class PlaybackService:
 
             self._state = PlaybackState.STOPPED
             self._current_device_id = None
-            self._current_device_type = None
 
             return True
 
@@ -244,11 +213,8 @@ class PlaybackService:
             if self._state != PlaybackState.PLAYING:
                 return False
 
-            if self._current_device_id and self._current_device_type:
-                if self._current_device_type == SpeakerType.CHROMECAST:
-                    await self._chromecast.pause_playback(self._current_device_id)
-                else:
-                    await self._lms.pause(self._current_device_id)
+            if self._current_device_id:
+                await self._chromecast.pause_playback(self._current_device_id)
 
             self._state = PlaybackState.PAUSED
             return True
@@ -259,13 +225,10 @@ class PlaybackService:
             if self._state != PlaybackState.PAUSED:
                 return False
 
-            if self._current_device_id and self._current_device_type:
-                if self._current_device_type == SpeakerType.CHROMECAST:
-                    await self._chromecast.play_url(
-                        self._current_device_id, self.stream_url
-                    )
-                else:
-                    await self._lms.resume(self._current_device_id)
+            if self._current_device_id:
+                await self._chromecast.play_url(
+                    self._current_device_id, self.stream_url
+                )
 
             self._state = PlaybackState.PLAYING
             return True

@@ -3,7 +3,7 @@ Pydantic models for API requests and responses.
 """
 
 from enum import Enum
-from typing import Literal, Optional
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -24,7 +24,6 @@ class PlaybackState(str, Enum):
 
 class SpeakerType(str, Enum):
     CHROMECAST = "chromecast"
-    LMS = "lms"
 
 
 # Station models
@@ -62,17 +61,6 @@ class ChromecastDevice(BaseModel):
     is_idle: bool
 
 
-class LMSPlayer(BaseModel):
-    id: str  # MAC address
-    name: str
-    model: str
-    ip_address: str
-    is_powered: bool
-    is_playing: bool
-    volume: float = Field(..., ge=0.0, le=1.0)
-    connected: bool
-
-
 # Unified speaker model for the frontend
 class Speaker(BaseModel):
     id: str
@@ -81,7 +69,7 @@ class Speaker(BaseModel):
     model: str
     ip_address: str
     volume: float = Field(..., ge=0.0, le=1.0)
-    is_available: bool  # powered/connected for LMS, not idle for Chromecast
+    is_available: bool  # not idle for Chromecast
 
 
 class VolumeRequest(BaseModel):
@@ -111,7 +99,6 @@ class TunerStatus(BaseModel):
 # Playback models
 class PlaybackStartRequest(BaseModel):
     device_id: str
-    device_type: SpeakerType = SpeakerType.CHROMECAST
     station_id: Optional[str] = None  # If provided, tune to station first
     frequency: Optional[float] = None  # Alternative: direct frequency
     modulation: Modulation = Modulation.WFM
@@ -120,7 +107,6 @@ class PlaybackStartRequest(BaseModel):
 class PlaybackStatus(BaseModel):
     state: PlaybackState
     device_id: Optional[str]
-    device_type: Optional[SpeakerType]
     device_name: Optional[str]
     frequency: Optional[float]
     modulation: Optional[Modulation]
