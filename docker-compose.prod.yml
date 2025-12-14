@@ -71,6 +71,7 @@ services:
       - music-assistant-data:/data
     environment:
       - LOG_LEVEL=info
+      - MASS_SAFE_MODE=true
     networks:
       - proxy
     labels:
