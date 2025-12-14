@@ -60,8 +60,7 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    network_mode: host
     cap_add:
       - SYS_ADMIN
       - DAC_READ_SEARCH
@@ -71,20 +70,6 @@ services:
       - music-assistant-data:/data
     environment:
       - LOG_LEVEL=info
-      - MASS_SAFE_MODE=true
-    networks:
-      - proxy
-    labels:
-      # Enable Traefik
-      - "traefik.enable=true"
-      - "traefik.docker.network=proxy"
-
-      # Music Assistant Router
-      - "traefik.http.routers.music-assistant.rule=Host(`music.local.seanonet.dev`)"
-      - "traefik.http.routers.music-assistant.entrypoints=https"
-      - "traefik.http.routers.music-assistant.tls=true"
-      - "traefik.http.routers.music-assistant.service=music-assistant"
-      - "traefik.http.services.music-assistant.loadbalancer.server.port=8095"
 
 networks:
   proxy:
