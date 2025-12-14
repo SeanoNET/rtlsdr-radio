@@ -14,11 +14,11 @@ services:
       - LMS_HTTPS=${LMS_HTTPS:-false}
       - EXTERNAL_STREAM_URL=${EXTERNAL_STREAM_URL:-}
     networks:
-      - traefik
+      - proxy
     labels:
       # Enable Traefik
       - "traefik.enable=true"
-      - "traefik.docker.network=traefik"
+      - "traefik.docker.network=proxy"
 
       # API Router
       - "traefik.http.routers.rtlsdr-api.rule=Host(`radio.local.seanonet.dev`) && PathPrefix(`/api`)"
@@ -41,11 +41,11 @@ services:
     depends_on:
       - backend
     networks:
-      - traefik
+      - proxy
     labels:
       # Enable Traefik
       - "traefik.enable=true"
-      - "traefik.docker.network=traefik"
+      - "traefik.docker.network=proxy"
 
       # Frontend Router
       - "traefik.http.routers.rtlsdr.rule=Host(`radio.local.seanonet.dev`)"
@@ -65,11 +65,11 @@ services:
     environment:
       - LOG_LEVEL=info
     networks:
-      - traefik
+      - proxy
     labels:
       # Enable Traefik
       - "traefik.enable=true"
-      - "traefik.docker.network=traefik"
+      - "traefik.docker.network=proxy"
 
       # Music Assistant Router
       - "traefik.http.routers.music-assistant.rule=Host(`music.local.seanonet.dev`)"
@@ -79,9 +79,8 @@ services:
       - "traefik.http.services.music-assistant.loadbalancer.server.port=8095"
 
 networks:
-  traefik:
+  proxy:
     external: true
-
 volumes:
   rtlsdr-data:
   music-assistant-data:
