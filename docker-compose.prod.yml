@@ -54,9 +54,34 @@ services:
       - "traefik.http.routers.rtlsdr.service=rtlsdr"
       - "traefik.http.services.rtlsdr.loadbalancer.server.port=80"
 
+  music-assistant:
+    image: ghcr.io/seanonet/rtlsdr-music-assistant:latest
+    container_name: music-assistant
+    restart: unless-stopped
+    depends_on:
+      - backend
+    volumes:
+      - music-assistant-data:/data
+    environment:
+      - LOG_LEVEL=info
+    networks:
+      - traefik
+    labels:
+      # Enable Traefik
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+
+      # Music Assistant Router
+      - "traefik.http.routers.music-assistant.rule=Host(`music.local.seanonet.dev`)"
+      - "traefik.http.routers.music-assistant.entrypoints=https"
+      - "traefik.http.routers.music-assistant.tls=true"
+      - "traefik.http.routers.music-assistant.service=music-assistant"
+      - "traefik.http.services.music-assistant.loadbalancer.server.port=8095"
+
 networks:
   traefik:
     external: true
 
 volumes:
   rtlsdr-data:
+  music-assistant-data:

@@ -3,7 +3,6 @@ services:
     build: ./backend
     container_name: rtlsdr-backend
     restart: unless-stopped
-    network_mode: host
     privileged: true
     devices:
       - /dev/bus/usb:/dev/bus/usb
@@ -14,16 +13,38 @@ services:
       - LMS_PORT=${LMS_PORT:-9000}
       - LMS_HTTPS=${LMS_HTTPS:-false}
       - EXTERNAL_STREAM_URL=${EXTERNAL_STREAM_URL:-}
-    # Ports exposed via host network:
-    # - 8000: FastAPI backend
-    # - 8089: Audio stream server
+    ports:
+      - "8000:8000"
+      - "8089:8089"
+    networks:
+      - rtlsdr-dev
 
   frontend:
     build: ./frontend
     container_name: rtlsdr-frontend
     restart: unless-stopped
-    network_mode: host
     depends_on:
       - backend
-    # Port exposed via host network:
-    # - 80: Nginx serving frontend + proxying API
+    ports:
+      - "80:80"
+    networks:
+      - rtlsdr-dev
+
+  music-assistant:
+    build: ./music_assistant_provider
+    container_name: music-assistant
+    restart: unless-stopped
+    depends_on:
+      - backend
+    volumes:
+      - ./music_assistant_data:/data
+    environment:
+      - LOG_LEVEL=debug
+    ports:
+      - "8095:8095"
+    networks:
+      - rtlsdr-dev
+
+networks:
+  rtlsdr-dev:
+    driver: bridge

@@ -4,9 +4,11 @@ RTL-SDR Chromecast Radio - Main FastAPI Application
 
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.routers import devices, playback, speakers, stations, stream, tuner
 from app.services.chromecast_service import ChromecastService
@@ -78,6 +80,11 @@ app.include_router(stations.router, prefix="/api/stations", tags=["stations"])
 app.include_router(tuner.router, prefix="/api/tuner", tags=["tuner"])
 app.include_router(playback.router, prefix="/api/playback", tags=["playback"])
 app.include_router(stream.router, prefix="/api", tags=["stream"])
+
+# Mount static files for station images
+static_path = Path(__file__).parent / "static"
+if static_path.exists():
+    app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
 
 
 @app.get("/api/health")

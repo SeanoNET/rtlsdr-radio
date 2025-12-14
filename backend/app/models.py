@@ -1,9 +1,11 @@
 """
 Pydantic models for API requests and responses.
 """
-from pydantic import BaseModel, Field
-from typing import Optional, Literal
+
 from enum import Enum
+from typing import Literal, Optional
+
+from pydantic import BaseModel, Field
 
 
 class Modulation(str, Enum):
@@ -30,6 +32,7 @@ class StationBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     frequency: float = Field(..., ge=24.0, le=1766.0, description="Frequency in MHz")
     modulation: Modulation = Modulation.WFM
+    image_url: Optional[str] = Field(None, description="URL to station logo/artwork")
 
 
 class StationCreate(StationBase):
@@ -40,6 +43,7 @@ class StationUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     frequency: Optional[float] = Field(None, ge=24.0, le=1766.0)
     modulation: Optional[Modulation] = None
+    image_url: Optional[str] = None
 
 
 class Station(StationBase):

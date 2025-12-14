@@ -47,16 +47,27 @@ class StationService:
 
     def _create_defaults(self):
         """Create some default FM station presets (Perth, Western Australia)."""
+        # (name, frequency, modulation, image_filename or None)
         defaults = [
-            ("Nova 93.7", 93.7, Modulation.WFM),
-            ("Mix 94.5", 94.5, Modulation.WFM),
-            ("96FM", 96.1, Modulation.WFM),
-            ("Triple M Perth", 92.9, Modulation.WFM),
-            ("Triple J", 99.3, Modulation.WFM),
+            ("Nova 93.7", 93.7, Modulation.WFM, "nova.webp"),
+            ("Mix 94.5", 94.5, Modulation.WFM, "945.jpg"),
+            ("96FM", 96.1, Modulation.WFM, "96.jpg"),
+            ("Triple M Perth", 92.9, Modulation.WFM, "triplem.png"),
+            ("Triple J", 99.3, Modulation.WFM, "triplej.png"),
+            ("6IX", 1080, Modulation.AM, "6ix.png"),
         ]
 
-        for name, freq, mod in defaults:
-            self.create(StationCreate(name=name, frequency=freq, modulation=mod))
+        for name, freq, mod, image in defaults:
+            # Image URL will be served from static files
+            image_url = f"/static/images/stations/{image}" if image else None
+            self.create(
+                StationCreate(
+                    name=name,
+                    frequency=freq,
+                    modulation=mod,
+                    image_url=image_url,
+                )
+            )
 
         logger.info("Created default station presets (Perth, WA)")
 
@@ -76,6 +87,7 @@ class StationService:
             name=station.name,
             frequency=station.frequency,
             modulation=station.modulation,
+            image_url=station.image_url,
         )
         self._stations[station_id] = new_station
         self._save()
@@ -93,6 +105,7 @@ class StationService:
             name=update_data.get("name", station.name),
             frequency=update_data.get("frequency", station.frequency),
             modulation=update_data.get("modulation", station.modulation),
+            image_url=update_data.get("image_url", station.image_url),
         )
 
         self._stations[station_id] = updated_station
