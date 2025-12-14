@@ -71,6 +71,10 @@ docker-compose up -d
 5. Click **Save**
 6. Your stations will appear in **Radio** section
 
+![RTL-SDR Radio Provider](docs/ma-radio-provider.png)
+
+![Radio Stations List](docs/ma-radio-list.png)
+
 ## Home Assistant Automations
 
 Once Music Assistant is connected to Home Assistant, you can control radio playback via automations:
