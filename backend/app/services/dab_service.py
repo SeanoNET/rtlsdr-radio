@@ -191,13 +191,25 @@ class DabService:
                 programs = []
 
                 # Parse welle-cli mux.json format
-                ensemble_name = data.get("ensemble", {}).get("label", "Unknown")
+                # Labels can be either strings or nested dicts with 'label' key
+                ensemble_data = data.get("ensemble", {}).get("label", "Unknown")
+                if isinstance(ensemble_data, dict):
+                    ensemble_name = ensemble_data.get("label", "Unknown")
+                else:
+                    ensemble_name = ensemble_data
                 self._ensemble = ensemble_name
 
                 for service in data.get("services", []):
+                    # Handle nested label structure
+                    label_data = service.get("label", "Unknown")
+                    if isinstance(label_data, dict):
+                        service_name = label_data.get("label", "Unknown")
+                    else:
+                        service_name = label_data
+
                     programs.append(DabProgram(
                         service_id=service.get("sid", 0),
-                        name=service.get("label", "Unknown"),
+                        name=service_name,
                         ensemble=ensemble_name,
                         channel=self._channel or "",
                         bitrate=service.get("bitrate"),
