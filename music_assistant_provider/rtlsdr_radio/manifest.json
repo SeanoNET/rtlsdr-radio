@@ -2,7 +2,7 @@
   "type": "music",
   "domain": "rtlsdr_radio",
   "name": "RTL-SDR Radio",
-  "description": "Stream FM/AM radio stations from RTL-SDR hardware",
+  "description": "Stream FM/AM and DAB+ radio stations from RTL-SDR hardware",
   "codeowners": ["@seanonet"],
   "documentation": "https://github.com/SeanoNET/rtlsdr-radio",
   "requirements": [],

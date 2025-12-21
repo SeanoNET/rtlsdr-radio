@@ -23,6 +23,9 @@ export default function RadioApp() {
   // New station form
   const [newStationName, setNewStationName] = useState("");
   const [newStationFreq, setNewStationFreq] = useState("");
+  const [newStationType, setNewStationType] = useState("fm");
+  const [newStationChannel, setNewStationChannel] = useState("");
+  const [newStationProgram, setNewStationProgram] = useState("");
 
   // Transfer playback dialog
   const [showTransferDialog, setShowTransferDialog] = useState(false);
@@ -83,26 +86,50 @@ export default function RadioApp() {
     try {
       // Browser playback - tune first, then play stream locally
       if (selectedSpeaker === BROWSER_SPEAKER_ID) {
-        // First tune the radio - always use frequency (tuner doesn't support station_id)
-        const tuneFrequency = selectedStation
-          ? stations.find((s) => s.id === selectedStation)?.frequency ||
-            parseFloat(frequency)
-          : parseFloat(frequency);
-        const tuneBody = { frequency: tuneFrequency, modulation: "wfm" };
+        const station = selectedStation
+          ? stations.find((s) => s.id === selectedStation)
+          : null;
 
-        const tuneRes = await fetch(`${API_BASE}/tuner/tune`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(tuneBody),
-        });
+        // Check if this is a DAB+ station
+        if (station?.station_type === "dab") {
+          // DAB+ tuning
+          const tuneRes = await fetch(`${API_BASE}/dab/tune`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              channel: station.dab_channel,
+              program: station.dab_program,
+              service_id: station.dab_service_id,
+            }),
+          });
 
-        if (!tuneRes.ok) {
-          const data = await tuneRes.json();
-          const detail =
-            typeof data.detail === "string"
-              ? data.detail
-              : JSON.stringify(data.detail) || "Failed to tune";
-          throw new Error(detail);
+          if (!tuneRes.ok) {
+            const data = await tuneRes.json();
+            const detail =
+              typeof data.detail === "string"
+                ? data.detail
+                : JSON.stringify(data.detail) || "Failed to tune DAB+";
+            throw new Error(detail);
+          }
+        } else {
+          // FM tuning
+          const tuneFrequency = station?.frequency || parseFloat(frequency);
+          const tuneBody = { frequency: tuneFrequency, modulation: "wfm" };
+
+          const tuneRes = await fetch(`${API_BASE}/tuner/tune`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(tuneBody),
+          });
+
+          if (!tuneRes.ok) {
+            const data = await tuneRes.json();
+            const detail =
+              typeof data.detail === "string"
+                ? data.detail
+                : JSON.stringify(data.detail) || "Failed to tune";
+            throw new Error(detail);
+          }
         }
 
         // Create audio element and play stream
@@ -114,13 +141,16 @@ export default function RadioApp() {
         return;
       }
 
-      // External speaker playback
+      // External speaker playback - station_id handles both FM and DAB+ automatically
       const body = {
         device_id: selectedSpeaker,
         ...(selectedStation
           ? { station_id: selectedStation }
           : { frequency: parseFloat(frequency), modulation: "wfm" }),
       };
+
+      // If no station selected but we have DAB+ params, this is manual DAB+ tuning
+      // (future enhancement - for now manual tuning is FM only)
 
       const res = await fetch(`${API_BASE}/playback/start`, {
         method: "POST",
@@ -208,22 +238,38 @@ export default function RadioApp() {
 
   const handleAddStation = async (e) => {
     e.preventDefault();
-    if (!newStationName || !newStationFreq) return;
+
+    // Validate based on station type
+    if (!newStationName) return;
+    if (newStationType === "fm" && !newStationFreq) return;
+    if (newStationType === "dab" && !newStationChannel) return;
 
     try {
+      const body = {
+        name: newStationName,
+        station_type: newStationType,
+      };
+
+      if (newStationType === "dab") {
+        body.dab_channel = newStationChannel;
+        body.dab_program = newStationProgram || newStationName;
+      } else {
+        body.frequency = parseFloat(newStationFreq);
+        body.modulation = "wfm";
+      }
+
       const res = await fetch(`${API_BASE}/stations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newStationName,
-          frequency: parseFloat(newStationFreq),
-          modulation: "wfm",
-        }),
+        body: JSON.stringify(body),
       });
 
       if (res.ok) {
         setNewStationName("");
         setNewStationFreq("");
+        setNewStationType("fm");
+        setNewStationChannel("");
+        setNewStationProgram("");
         await fetchStations();
       }
     } catch (err) {
@@ -325,7 +371,7 @@ export default function RadioApp() {
           📻 RTL-SDR Radio
         </h1>
         <p className="text-slate-400 text-center mb-8">
-          Stream FM radio to Chromecast or Squeezebox
+          Stream FM &amp; DAB+ radio to Chromecast or Squeezebox
         </p>
 
         {error && (
@@ -345,12 +391,21 @@ export default function RadioApp() {
           <div className="bg-white/5 backdrop-blur rounded-xl p-6 mb-6 border border-white/10">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-400">Now Playing</p>
-                <p className="text-2xl font-semibold">
-                  {playbackStatus.frequency
-                    ? `${playbackStatus.frequency} MHz`
-                    : "Not tuned"}
+                <p className="text-sm text-slate-400">
+                  Now Playing {playbackStatus.radio_mode === "dab" ? "(DAB+)" : playbackStatus.radio_mode === "fm" ? "(FM)" : ""}
                 </p>
+                <p className="text-2xl font-semibold">
+                  {playbackStatus.radio_mode === "dab"
+                    ? (playbackStatus.dab_program || playbackStatus.dab_channel || "DAB+")
+                    : playbackStatus.frequency
+                      ? `${playbackStatus.frequency} MHz`
+                      : "Not tuned"}
+                </p>
+                {playbackStatus.radio_mode === "dab" && playbackStatus.dab_channel && (
+                  <p className="text-sm text-slate-400">
+                    Channel {playbackStatus.dab_channel}
+                  </p>
+                )}
                 {playbackStatus.device_name && (
                   <p className="text-sm text-purple-400">
                     {playbackStatus.device_type === "lms" ? "🔊" : "📺"}{" "}
@@ -547,13 +602,17 @@ export default function RadioApp() {
                 <button
                   onClick={() => {
                     setSelectedStation(station.id);
-                    setFrequency(station.frequency);
+                    if (station.station_type !== "dab" && station.frequency) {
+                      setFrequency(station.frequency);
+                    }
                   }}
                   className="flex-1 text-left"
                 >
                   <p className="font-medium">{station.name}</p>
                   <p className="text-sm text-slate-400">
-                    {station.frequency} MHz
+                    {station.station_type === "dab"
+                      ? `DAB+ ${station.dab_channel}${station.dab_program ? ` • ${station.dab_program}` : ""}`
+                      : `${station.frequency} MHz`}
                   </p>
                 </button>
                 <button
@@ -593,28 +652,59 @@ export default function RadioApp() {
             className="border-t border-white/10 pt-4 mt-4"
           >
             <p className="text-sm text-slate-400 mb-2">Add new station:</p>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newStationName}
-                onChange={(e) => setNewStationName(e.target.value)}
-                className="flex-1 bg-white/10 rounded-lg px-4 py-2 border border-white/10 focus:border-purple-500 focus:outline-none"
-                placeholder="Station name"
-              />
-              <input
-                type="number"
-                step="0.1"
-                value={newStationFreq}
-                onChange={(e) => setNewStationFreq(e.target.value)}
-                className="w-24 bg-white/10 rounded-lg px-4 py-2 border border-white/10 focus:border-purple-500 focus:outline-none"
-                placeholder="MHz"
-              />
-              <button
-                type="submit"
-                className="bg-purple-600 hover:bg-purple-500 rounded-lg px-4 py-2 font-medium"
-              >
-                Add
-              </button>
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-2">
+                <select
+                  value={newStationType}
+                  onChange={(e) => setNewStationType(e.target.value)}
+                  className="bg-white/10 rounded-lg px-3 py-2 border border-white/10 focus:border-purple-500 focus:outline-none"
+                >
+                  <option value="fm">FM</option>
+                  <option value="dab">DAB+</option>
+                </select>
+                <input
+                  type="text"
+                  value={newStationName}
+                  onChange={(e) => setNewStationName(e.target.value)}
+                  className="flex-1 bg-white/10 rounded-lg px-4 py-2 border border-white/10 focus:border-purple-500 focus:outline-none"
+                  placeholder="Station name"
+                />
+              </div>
+              <div className="flex gap-2">
+                {newStationType === "dab" ? (
+                  <>
+                    <input
+                      type="text"
+                      value={newStationChannel}
+                      onChange={(e) => setNewStationChannel(e.target.value)}
+                      className="w-24 bg-white/10 rounded-lg px-4 py-2 border border-white/10 focus:border-purple-500 focus:outline-none"
+                      placeholder="9C"
+                    />
+                    <input
+                      type="text"
+                      value={newStationProgram}
+                      onChange={(e) => setNewStationProgram(e.target.value)}
+                      className="flex-1 bg-white/10 rounded-lg px-4 py-2 border border-white/10 focus:border-purple-500 focus:outline-none"
+                      placeholder="Program name (optional)"
+                    />
+                  </>
+                ) : (
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={newStationFreq}
+                    onChange={(e) => setNewStationFreq(e.target.value)}
+                    className="flex-1 bg-white/10 rounded-lg px-4 py-2 border border-white/10 focus:border-purple-500 focus:outline-none"
+                    placeholder="Frequency (MHz)"
+                  />
+                )}
+                <button
+                  type="submit"
+                  className="bg-purple-600 hover:bg-purple-500 rounded-lg px-4 py-2 font-medium"
+                >
+                  Add
+                </button>
+              </div>
             </div>
           </form>
         </div>

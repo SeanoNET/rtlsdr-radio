@@ -132,22 +132,47 @@ class RTLSDRRadioProvider(MusicProvider):
             return None
 
     async def _tune_to_station(self, station: dict) -> bool:
-        """Tune the RTL-SDR to the station's frequency."""
+        """Tune the RTL-SDR to the station's frequency or DAB+ channel."""
         if not self._session:
             return False
         try:
-            frequency = station.get("frequency")
-            modulation = station.get("modulation", "wfm")
+            station_type = station.get("station_type", "fm")
 
-            async with self._session.post(
-                f"{self._api_base_url}/tuner/tune",
-                json={"frequency": frequency, "modulation": modulation},
-            ) as response:
-                if response.status == 200:
-                    self.logger.info("Tuned to %s MHz (%s)", frequency, modulation)
-                    return True
-                self.logger.error("Failed to tune: %s", response.status)
-                return False
+            if station_type == "dab":
+                # DAB+ tuning
+                dab_channel = station.get("dab_channel")
+                dab_program = station.get("dab_program")
+                dab_service_id = station.get("dab_service_id")
+
+                async with self._session.post(
+                    f"{self._api_base_url}/dab/tune",
+                    json={
+                        "channel": dab_channel,
+                        "program": dab_program,
+                        "service_id": dab_service_id,
+                    },
+                ) as response:
+                    if response.status == 200:
+                        self.logger.info(
+                            "Tuned to DAB+ %s (%s)", dab_channel, dab_program
+                        )
+                        return True
+                    self.logger.error("Failed to tune DAB+: %s", response.status)
+                    return False
+            else:
+                # FM tuning
+                frequency = station.get("frequency")
+                modulation = station.get("modulation", "wfm")
+
+                async with self._session.post(
+                    f"{self._api_base_url}/tuner/tune",
+                    json={"frequency": frequency, "modulation": modulation},
+                ) as response:
+                    if response.status == 200:
+                        self.logger.info("Tuned to %s MHz (%s)", frequency, modulation)
+                        return True
+                    self.logger.error("Failed to tune: %s", response.status)
+                    return False
         except aiohttp.ClientError as err:
             self.logger.error("Error tuning: %s", err)
             return False
@@ -155,8 +180,7 @@ class RTLSDRRadioProvider(MusicProvider):
     def _station_to_radio(self, station: dict) -> Radio:
         """Convert an RTL-SDR station to a Music Assistant Radio item."""
         station_id = station["id"]
-        modulation = station.get("modulation", "wfm").upper()
-        frequency = station.get("frequency", 0)
+        station_type = station.get("station_type", "fm")
 
         radio = Radio(
             item_id=station_id,
@@ -171,8 +195,17 @@ class RTLSDRRadioProvider(MusicProvider):
             },
         )
 
-        # Add metadata
-        radio.metadata.description = f"{frequency} MHz {modulation}"
+        # Add metadata based on station type
+        if station_type == "dab":
+            dab_channel = station.get("dab_channel", "")
+            dab_program = station.get("dab_program", "")
+            radio.metadata.description = f"DAB+ {dab_channel}"
+            if dab_program:
+                radio.metadata.description += f" • {dab_program}"
+        else:
+            modulation = station.get("modulation", "wfm").upper()
+            frequency = station.get("frequency", 0)
+            radio.metadata.description = f"{frequency} MHz {modulation}"
         radio.metadata.links = UniqueList(
             [
                 MediaItemLink(
