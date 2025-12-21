@@ -20,6 +20,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libfftw3-dev \
     libfaad-dev \
     libmpg123-dev \
+    libusb-1.0-0-dev \
+    libmp3lame-dev \
+    pkg-config \
+    xxd \
     && git clone --depth 1 https://github.com/AlbrechtL/welle.io.git /tmp/welle.io \
     && cd /tmp/welle.io \
     && mkdir build && cd build \
@@ -27,7 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && make -j$(nproc) \
     && cp welle-cli /usr/local/bin/ \
     && cd / && rm -rf /tmp/welle.io \
-    && apt-get purge -y git build-essential cmake \
+    && apt-get purge -y git build-essential cmake pkg-config xxd \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
