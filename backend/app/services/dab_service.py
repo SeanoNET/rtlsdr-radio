@@ -206,8 +206,15 @@ class DabService:
                     else:
                         service_name = label_data
 
+                    # Parse service_id - can be int or hex string like '0x3c01'
+                    sid_raw = service.get("sid", 0)
+                    if isinstance(sid_raw, str):
+                        service_id = int(sid_raw, 16) if sid_raw.startswith("0x") else int(sid_raw)
+                    else:
+                        service_id = sid_raw
+
                     programs.append(DabProgram(
-                        service_id=service.get("sid", 0),
+                        service_id=service_id,
                         name=service_name,
                         ensemble=ensemble_name,
                         channel=self._channel or "",
