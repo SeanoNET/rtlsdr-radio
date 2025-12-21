@@ -150,7 +150,7 @@ class TunerService:
                 
                 # Check if processes are still running
                 if self._rtl_process.poll() is not None:
-                    stderr = self._rtl_process.stderr.read().decode() if self._rtl_process.stderr else ""
+                    stderr = self._rtl_process.stderr.read().decode(errors='replace') if self._rtl_process.stderr else ""
                     logger.error(f"rtl_fm failed to start: {stderr}")
                     return False
                 

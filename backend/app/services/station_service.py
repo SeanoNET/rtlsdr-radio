@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from app.models import Modulation, Station, StationCreate, StationUpdate
+from app.models import Modulation, Station, StationCreate, StationType, StationUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -46,9 +46,9 @@ class StationService:
             logger.error(f"Failed to save stations: {e}")
 
     def _create_defaults(self):
-        """Create some default FM station presets (Perth, Western Australia)."""
-        # (name, frequency, modulation, image_filename or None)
-        defaults = [
+        """Create default station presets (Perth, Western Australia)."""
+        # FM defaults: (name, frequency, modulation, image_filename)
+        fm_defaults = [
             ("Nova 93.7", 93.7, Modulation.WFM, "nova.webp"),
             ("Mix 94.5", 94.5, Modulation.WFM, "945.jpg"),
             ("96FM", 96.1, Modulation.WFM, "96.jpg"),
@@ -57,19 +57,45 @@ class StationService:
             ("6IX", 1080, Modulation.AM, "6ix.png"),
         ]
 
-        for name, freq, mod, image in defaults:
-            # Image URL will be served from static files
+        for name, freq, mod, image in fm_defaults:
             image_url = f"/static/images/stations/{image}" if image else None
             self.create(
                 StationCreate(
                     name=name,
+                    station_type=StationType.FM,
                     frequency=freq,
                     modulation=mod,
                     image_url=image_url,
                 )
             )
 
-        logger.info("Created default station presets (Perth, WA)")
+        # DAB+ defaults: (name, channel, program_name, image_filename)
+        # Perth DAB+ commercial stations on 9C, ABC stations on 9A/9B
+        dab_defaults = [
+            # Commercial stations (matching FM list)
+            ("Nova 937 DAB+", "9C", "Nova 937", "nova.webp"),
+            ("Mix 94.5 DAB+", "9C", "Mix 94.5", "945.jpg"),
+            ("96FM DAB+", "9C", "96FM", "96.jpg"),
+            ("Triple M DAB+", "9C", "Triple M", "triplem.png"),
+            # ABC stations
+            ("Triple J DAB+", "9B", "Triple J", "triplej.png"),
+            ("Double J DAB+", "9B", "Double J", None),
+            ("ABC Perth DAB+", "9A", "ABC Perth", "abc.png"),
+        ]
+
+        for name, channel, program, image in dab_defaults:
+            image_url = f"/static/images/stations/{image}" if image else None
+            self.create(
+                StationCreate(
+                    name=name,
+                    station_type=StationType.DAB,
+                    dab_channel=channel,
+                    dab_program=program,
+                    image_url=image_url,
+                )
+            )
+
+        logger.info("Created default FM and DAB+ station presets (Perth, WA)")
 
     def get_all(self) -> List[Station]:
         """Get all stations."""
@@ -85,9 +111,15 @@ class StationService:
         new_station = Station(
             id=station_id,
             name=station.name,
+            station_type=station.station_type,
+            image_url=station.image_url,
+            # FM fields
             frequency=station.frequency,
             modulation=station.modulation,
-            image_url=station.image_url,
+            # DAB fields
+            dab_channel=station.dab_channel,
+            dab_program=station.dab_program,
+            dab_service_id=station.dab_service_id,
         )
         self._stations[station_id] = new_station
         self._save()
@@ -103,9 +135,15 @@ class StationService:
         updated_station = Station(
             id=station_id,
             name=update_data.get("name", station.name),
+            station_type=update_data.get("station_type", station.station_type),
+            image_url=update_data.get("image_url", station.image_url),
+            # FM fields
             frequency=update_data.get("frequency", station.frequency),
             modulation=update_data.get("modulation", station.modulation),
-            image_url=update_data.get("image_url", station.image_url),
+            # DAB fields
+            dab_channel=update_data.get("dab_channel", station.dab_channel),
+            dab_program=update_data.get("dab_program", station.dab_program),
+            dab_service_id=update_data.get("dab_service_id", station.dab_service_id),
         )
 
         self._stations[station_id] = updated_station
