@@ -10,6 +10,7 @@ services:
       - rtlsdr-data:/app/data
     environment:
       - EXTERNAL_STREAM_URL=${EXTERNAL_STREAM_URL:-}
+      - DEFAULT_STATIONS=${DEFAULT_STATIONS:-all}  # Options: fm, dab, all, none
     ports:
       - "127.0.0.1:18000:8000" # Local only for Music Assistant
       - "127.0.0.1:18089:8089" # Stream port for local access
