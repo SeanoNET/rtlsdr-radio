@@ -13,11 +13,11 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
-# RadioBrowser API endpoints (multiple servers available)
+# RadioBrowser API endpoints (fetched from all.api.radio-browser.info/json/servers)
+# These change over time - update if logo fetching stops working
 RADIO_BROWSER_SERVERS = [
-    "https://de1.api.radio-browser.info",
-    "https://nl1.api.radio-browser.info",
-    "https://at1.api.radio-browser.info",
+    "https://de2.api.radio-browser.info",
+    "https://fi1.api.radio-browser.info",
 ]
 
 # Image storage path

@@ -21,11 +21,35 @@ async def _fetch_and_update_logo(station_id: str, station_name: str):
         station_service.update(station_id, StationUpdate(image_url=logo_url))
 
 
+async def _fetch_missing_logos(stations: List[Station]):
+    """Background task to fetch logos for stations missing images."""
+    logo_service = get_logo_service()
+    station_service = get_station_service()
+
+    for station in stations:
+        if not station.image_url:
+            logo_url = await logo_service.fetch_logo_for_station(station.name)
+            if logo_url:
+                station_service.update(station.id, StationUpdate(image_url=logo_url))
+
+
 @router.get("", response_model=List[Station])
-async def list_stations():
-    """List all station presets."""
+async def list_stations(background_tasks: BackgroundTasks):
+    """List all station presets.
+
+    If any stations are missing logos, a background task will attempt
+    to fetch them from RadioBrowser. The logos will be available on
+    subsequent requests.
+    """
     service = get_station_service()
-    return service.get_all()
+    stations = service.get_all()
+
+    # Check if any stations are missing logos
+    missing_logos = [s for s in stations if not s.image_url]
+    if missing_logos:
+        background_tasks.add_task(_fetch_missing_logos, missing_logos)
+
+    return stations
 
 
 @router.post("", response_model=Station, status_code=201)
@@ -47,6 +71,34 @@ async def create_station(station: StationCreate, background_tasks: BackgroundTas
         )
 
     return created_station
+
+
+@router.post("/refresh-logos")
+async def refresh_all_logos(background_tasks: BackgroundTasks):
+    """
+    Refresh logos for all stations by re-fetching from RadioBrowser.
+
+    This runs in the background and will update stations as logos are found.
+    Use this after fixing RadioBrowser connectivity issues or to bulk-update logos.
+    """
+    station_service = get_station_service()
+    stations = station_service.get_all()
+
+    async def _refresh_all(stations_to_refresh: List[Station]):
+        logo_service = get_logo_service()
+        for station in stations_to_refresh:
+            logo_url = await logo_service.fetch_logo_for_station(
+                station.name, force_refresh=True
+            )
+            if logo_url:
+                station_service.update(station.id, StationUpdate(image_url=logo_url))
+
+    background_tasks.add_task(_refresh_all, stations)
+
+    return {
+        "message": f"Refreshing logos for {len(stations)} stations in background",
+        "station_count": len(stations),
+    }
 
 
 @router.get("/{station_id}", response_model=Station)
