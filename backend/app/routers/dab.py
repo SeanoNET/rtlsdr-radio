@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from app.models import (
     DabChannel,
+    DabMetadata,
     DabProgram,
     DabScanRequest,
     DabScanResult,
@@ -88,3 +89,22 @@ async def stop_dab(request: Request):
     dab_service = request.app.state.dab_service
     await dab_service.stop()
     return {"success": True, "message": "DAB+ tuner stopped"}
+
+
+@router.get("/metadata", response_model=DabMetadata)
+async def get_dab_metadata(request: Request):
+    """
+    Get current DAB+ program metadata including PAD data.
+
+    Returns real-time information including:
+    - **dls**: Dynamic Label Segment - "now playing" text (artist, song, show info)
+    - **mot_image**: Base64-encoded slideshow image (station logo, album art)
+    - **signal**: Signal quality metrics (SNR, FIC quality)
+    - **audio**: Audio stream info (stereo/mono, bitrate, sample rate)
+    - **pty**: Program type (genre)
+
+    Poll this endpoint every 5-10 seconds when DAB+ is playing
+    to get updated "now playing" information.
+    """
+    dab_service = request.app.state.dab_service
+    return await dab_service.get_metadata()

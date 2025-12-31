@@ -197,3 +197,43 @@ class DabStatus(BaseModel):
     service_id: Optional[int] = None
     ensemble: Optional[str] = None
     is_running: bool = False
+
+
+class DabSignalQuality(BaseModel):
+    """Signal quality metrics from DAB+ reception."""
+    snr: Optional[float] = Field(None, description="Signal-to-noise ratio in dB")
+    fic_quality: Optional[int] = Field(None, ge=0, le=100, description="FIC quality percentage")
+
+
+class DabAudioInfo(BaseModel):
+    """Audio stream information."""
+    mode: Optional[str] = Field(None, description="Audio mode (stereo, mono, joint stereo)")
+    bitrate: Optional[int] = Field(None, description="Audio bitrate in kbps")
+    sample_rate: Optional[int] = Field(None, description="Sample rate in Hz")
+
+
+class DabMetadata(BaseModel):
+    """Real-time DAB+ program metadata including PAD (Program Associated Data)."""
+    # Basic program info
+    program: Optional[str] = Field(None, description="Program/station name")
+    service_id: Optional[int] = Field(None, description="DAB service ID")
+    ensemble: Optional[str] = Field(None, description="Ensemble name")
+    channel: Optional[str] = Field(None, description="DAB channel")
+
+    # Dynamic Label Segment (now playing)
+    dls: Optional[str] = Field(None, description="Dynamic Label Segment - now playing text")
+
+    # MOT Slideshow
+    mot_image: Optional[str] = Field(None, description="Base64-encoded slideshow image")
+    mot_content_type: Optional[str] = Field(None, description="MIME type of MOT image")
+
+    # Program type
+    pty: Optional[str] = Field(None, description="Program type (e.g., Pop Music, News)")
+    pty_code: Optional[int] = Field(None, description="PTY code number")
+
+    # Signal and audio quality
+    signal: Optional[DabSignalQuality] = None
+    audio: Optional[DabAudioInfo] = None
+
+    # Status
+    is_playing: bool = Field(False, description="Whether DAB+ is currently playing")

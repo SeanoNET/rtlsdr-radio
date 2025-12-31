@@ -331,10 +331,19 @@ class RTLSDRRadioProvider(MusicProvider):
         ensemble = program.get("ensemble", "Unknown")
         channel = program.get("channel", "")
         bitrate = program.get("bitrate")
-        description = f"DAB+ {channel} • {ensemble}"
+        program_type = program.get("program_type")  # PTY genre
+
+        # Build description with available info
+        description_parts = [f"DAB+ {channel}", ensemble]
+        if program_type:
+            description_parts.append(program_type)
         if bitrate:
-            description += f" • {bitrate}kbps"
-        radio.metadata.description = description
+            description_parts.append(f"{bitrate}kbps")
+        radio.metadata.description = " • ".join(description_parts)
+
+        # Set genre from PTY if available
+        if program_type:
+            radio.metadata.genres = {program_type}
 
         radio.metadata.links = UniqueList(
             [

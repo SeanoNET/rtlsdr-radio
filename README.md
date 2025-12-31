@@ -8,6 +8,7 @@ Stream FM/AM and DAB+ radio from an [RTL-SDR](https://www.rtl-sdr.com/about-rtl-
 
 - **FM/AM Radio** - Tune to analog radio stations
 - **DAB+ Radio** - Receive digital radio with channel scanning
+- **DAB+ Now Playing** - Real-time DLS text, MOT slideshow images, signal quality, and program type
 - **Chromecast Support** - Stream directly to Chromecast/Google Home devices
 - **Music Assistant Integration** - Custom provider exposes stations as radio items
 - **Squeezelite Support** - Play to Squeezelite players via Music Assistant's Slimproto
@@ -119,6 +120,20 @@ DAB+ stations require:
 - **Program Name**: The station name on that channel
 - **Service ID**: Unique identifier for the program
 
+### DAB+ Program Associated Data (PAD)
+
+When playing DAB+ stations, the web UI displays real-time metadata from the broadcast:
+
+| Feature | Description |
+|---------|-------------|
+| **DLS (Dynamic Label Segment)** | "Now playing" text - artist, song, show info |
+| **MOT Slideshow** | Station logos, album art, or promotional images |
+| **Signal Quality** | Visual signal bars and SNR (dB) reading |
+| **Audio Info** | Stereo/mono mode and bitrate (kbps) |
+| **Program Type (PTY)** | Genre/category (e.g., Pop Music, News, Sport) |
+
+The metadata is polled every 5 seconds while DAB+ is playing. Not all stations broadcast all PAD features.
+
 ## Home Assistant Automations
 
 Control radio playback via Home Assistant automations through Music Assistant:
@@ -204,3 +219,15 @@ sudo udevadm control --reload-rules
 - Ensure `welle-cli` is installed in the backend container
 - Check your RTL-SDR supports the DAB+ frequency range
 - Try different channels - not all channels have active multiplexes in your area
+
+## Future Improvements
+
+The following features require upstream changes to Music Assistant:
+
+| Feature | Description |
+|---------|-------------|
+| **Real-time "Now Playing"** | Display DLS/MOT metadata in Music Assistant UI |
+| **Live Metadata in Home Assistant** | Stream current track info to HA media player entities |
+| **TPEG Traffic Data** | Parse and display traffic/travel information from DAB+ broadcasts |
+
+These features work in the web UI but cannot be pushed to Music Assistant due to its static provider model. The MA provider currently exposes PTY (genre) information for discovered DAB+ programs.

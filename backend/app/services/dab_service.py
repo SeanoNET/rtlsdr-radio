@@ -9,7 +9,14 @@ from typing import List, Optional
 
 import aiohttp
 
-from app.models import DabProgram, DabScanResult, DabStatus
+from app.models import (
+    DabProgram,
+    DabScanResult,
+    DabStatus,
+    DabMetadata,
+    DabSignalQuality,
+    DabAudioInfo,
+)
 from app.config.dab_channels import get_channel_frequency, get_common_channels
 
 logger = logging.getLogger(__name__)
@@ -397,3 +404,152 @@ class DabService:
             self._service_id = None
             self._ensemble = None
             logger.info("DAB+ tuner stopped")
+
+    async def get_metadata(self) -> DabMetadata:
+        """
+        Get current DAB+ program metadata including PAD data.
+
+        Fetches real-time metadata from welle-cli including:
+        - DLS (Dynamic Label Segment) - now playing text
+        - MOT (Multimedia Object Transfer) - slideshow images
+        - Signal quality metrics
+        - Audio stream info
+        - Program type (PTY)
+
+        Returns:
+            DabMetadata with current program information.
+        """
+        if not self.is_running or self._service_id is None:
+            return DabMetadata(is_playing=False)
+
+        try:
+            session = await self._get_http_session()
+            async with session.get(
+                f"{self.welle_base_url}/mux.json",
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as response:
+                if response.status != 200:
+                    logger.warning(f"Failed to get metadata: HTTP {response.status}")
+                    return DabMetadata(
+                        program=self._program,
+                        service_id=self._service_id,
+                        ensemble=self._ensemble,
+                        channel=self._channel,
+                        is_playing=True,
+                    )
+
+                data = await response.json()
+                return self._parse_metadata(data)
+
+        except asyncio.TimeoutError:
+            logger.warning("Timeout getting metadata from welle-cli")
+            return DabMetadata(
+                program=self._program,
+                service_id=self._service_id,
+                ensemble=self._ensemble,
+                channel=self._channel,
+                is_playing=True,
+            )
+        except Exception as e:
+            logger.error(f"Error getting metadata: {e}")
+            return DabMetadata(
+                program=self._program,
+                service_id=self._service_id,
+                ensemble=self._ensemble,
+                channel=self._channel,
+                is_playing=True,
+            )
+
+    def _parse_metadata(self, data: dict) -> DabMetadata:
+        """Parse welle-cli mux.json response into DabMetadata."""
+        # Find the current service
+        current_service = None
+        for service in data.get("services", []):
+            # Parse service_id - can be int or hex string
+            sid_raw = service.get("sid", 0)
+            if isinstance(sid_raw, str):
+                sid = int(sid_raw, 16) if sid_raw.startswith("0x") else int(sid_raw)
+            else:
+                sid = sid_raw
+
+            if sid == self._service_id:
+                current_service = service
+                break
+
+        if not current_service:
+            return DabMetadata(
+                program=self._program,
+                service_id=self._service_id,
+                ensemble=self._ensemble,
+                channel=self._channel,
+                is_playing=True,
+            )
+
+        # Parse program name (handle nested label structure)
+        label_data = current_service.get("label", "Unknown")
+        if isinstance(label_data, dict):
+            program_name = label_data.get("label", "Unknown")
+        else:
+            program_name = label_data
+
+        # Parse MOT data (DLS and slideshow)
+        mot_data = current_service.get("mot", {})
+        dls = mot_data.get("dls") if isinstance(mot_data, dict) else None
+
+        # MOT slideshow image
+        mot_image = None
+        mot_content_type = None
+        if isinstance(mot_data, dict):
+            mot_image = mot_data.get("mot")  # Base64 image data
+            mot_content_type = mot_data.get("mot_type", "image/jpeg")
+
+        # Parse PTY (program type)
+        pty_label = current_service.get("pty_label")
+        pty_code = current_service.get("pty")
+
+        # Parse audio info
+        audio_mode = current_service.get("audio_mode")
+        bitrate = current_service.get("bitrate")
+        sample_rate = current_service.get("samplerate")
+
+        audio_info = None
+        if audio_mode or bitrate or sample_rate:
+            audio_info = DabAudioInfo(
+                mode=audio_mode,
+                bitrate=bitrate,
+                sample_rate=sample_rate,
+            )
+
+        # Parse signal quality from ensemble
+        ensemble_data = data.get("ensemble", {})
+        snr = ensemble_data.get("snr")
+        fic_quality = ensemble_data.get("fic_quality")
+
+        signal_quality = None
+        if snr is not None or fic_quality is not None:
+            signal_quality = DabSignalQuality(
+                snr=snr,
+                fic_quality=fic_quality,
+            )
+
+        # Get ensemble name
+        ensemble_label = ensemble_data.get("label", "Unknown")
+        if isinstance(ensemble_label, dict):
+            ensemble_name = ensemble_label.get("label", "Unknown")
+        else:
+            ensemble_name = ensemble_label
+
+        return DabMetadata(
+            program=program_name,
+            service_id=self._service_id,
+            ensemble=ensemble_name,
+            channel=self._channel,
+            dls=dls,
+            mot_image=mot_image,
+            mot_content_type=mot_content_type,
+            pty=pty_label,
+            pty_code=pty_code,
+            signal=signal_quality,
+            audio=audio_info,
+            is_playing=True,
+        )

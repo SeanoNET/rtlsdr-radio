@@ -52,6 +52,9 @@ export default function RadioApp() {
   const [dabPrograms, setDabPrograms] = useState([]);
   const [scanning, setScanning] = useState(false);
 
+  // DAB+ metadata (now playing info)
+  const [dabMetadata, setDabMetadata] = useState(null);
+
   // Transfer playback dialog
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [pendingSpeakerChange, setPendingSpeakerChange] = useState(null);
@@ -93,6 +96,16 @@ export default function RadioApp() {
       setDabChannels(data);
     } catch (err) {
       console.error("Failed to fetch DAB channels");
+    }
+  }, []);
+
+  const fetchDabMetadata = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/dab/metadata`);
+      const data = await res.json();
+      setDabMetadata(data);
+    } catch (err) {
+      console.debug("Failed to fetch DAB metadata:", err);
     }
   }, []);
 
@@ -141,6 +154,23 @@ export default function RadioApp() {
     const interval = setInterval(fetchPlaybackStatus, 2000);
     return () => clearInterval(interval);
   }, [fetchSpeakers, fetchStations, fetchPlaybackStatus, fetchDabChannels]);
+
+  // Poll DAB+ metadata when playing DAB+ radio
+  useEffect(() => {
+    const isDabPlaying = playbackStatus?.radio_mode === "dab" ||
+      (browserPlaying && selectedStation && stations.find(s => s.id === selectedStation)?.station_type === "dab");
+
+    if (isDabPlaying) {
+      // Fetch immediately when DAB+ starts
+      fetchDabMetadata();
+      // Then poll every 5 seconds
+      const metadataInterval = setInterval(fetchDabMetadata, 5000);
+      return () => clearInterval(metadataInterval);
+    } else {
+      // Clear metadata when not playing DAB+
+      setDabMetadata(null);
+    }
+  }, [playbackStatus?.radio_mode, browserPlaying, selectedStation, stations, fetchDabMetadata]);
 
   // Computed playback state - defined early so handlers can use them
   const isPlaying = playbackStatus?.state === "playing" || browserPlaying;
@@ -516,6 +546,80 @@ export default function RadioApp() {
                 }`}
               />
             </div>
+
+            {/* DAB+ Metadata - Now Playing info */}
+            {dabMetadata && dabMetadata.is_playing && (
+              <div className="mt-4 pt-4 border-t border-white/10">
+                {/* DLS - Now Playing Text */}
+                {dabMetadata.dls && (
+                  <div className="mb-3">
+                    <p className="text-xs text-slate-500 uppercase tracking-wide mb-1">Now Playing</p>
+                    <p className="text-lg text-purple-300">{dabMetadata.dls}</p>
+                  </div>
+                )}
+
+                {/* MOT Slideshow Image */}
+                {dabMetadata.mot_image && (
+                  <div className="mb-3">
+                    <img
+                      src={`data:${dabMetadata.mot_content_type || 'image/jpeg'};base64,${dabMetadata.mot_image}`}
+                      alt="Station slideshow"
+                      className="max-w-full h-auto rounded-lg max-h-32 object-contain"
+                    />
+                  </div>
+                )}
+
+                {/* Signal Quality and Audio Info */}
+                <div className="flex flex-wrap gap-4 text-sm">
+                  {/* Signal Quality */}
+                  {dabMetadata.signal && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400">Signal:</span>
+                      <div className="flex items-center gap-1">
+                        {/* Signal bars visualization */}
+                        {[1, 2, 3, 4, 5].map((bar) => {
+                          const quality = dabMetadata.signal.fic_quality || 0;
+                          const isActive = quality >= bar * 20;
+                          return (
+                            <div
+                              key={bar}
+                              className={`w-1 rounded-sm transition-all ${
+                                isActive ? "bg-green-500" : "bg-slate-600"
+                              }`}
+                              style={{ height: `${bar * 3 + 4}px` }}
+                            />
+                          );
+                        })}
+                        {dabMetadata.signal.snr !== null && (
+                          <span className="text-slate-400 ml-1">
+                            {dabMetadata.signal.snr?.toFixed(1)} dB
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Audio Mode */}
+                  {dabMetadata.audio?.mode && (
+                    <div className="flex items-center gap-1">
+                      <span className="text-slate-400">Audio:</span>
+                      <span className="text-slate-300">{dabMetadata.audio.mode}</span>
+                      {dabMetadata.audio.bitrate && (
+                        <span className="text-slate-400">({dabMetadata.audio.bitrate} kbps)</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Program Type */}
+                  {dabMetadata.pty && (
+                    <div className="flex items-center gap-1">
+                      <span className="text-slate-400">Genre:</span>
+                      <span className="text-slate-300">{dabMetadata.pty}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
