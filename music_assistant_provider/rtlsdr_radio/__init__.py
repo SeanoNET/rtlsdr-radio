@@ -70,6 +70,22 @@ async def get_config_entries(
             description="Port for the RTL-SDR Radio API",
             required=True,
         ),
+        ConfigEntry(
+            key="enable_dab_discovery",
+            type=ConfigEntryType.BOOLEAN,
+            label="Enable DAB+ Auto-Discovery",
+            default_value=True,
+            description="Automatically discover DAB+ programs on configured channels",
+            required=False,
+        ),
+        ConfigEntry(
+            key="dab_channels",
+            type=ConfigEntryType.STRING,
+            label="DAB+ Channels to Scan",
+            default_value="9A,9B,9C",
+            description="Comma-separated DAB+ channel IDs (e.g., 9A,9B,9C for Perth)",
+            required=False,
+        ),
     )
 
 
@@ -79,6 +95,7 @@ class RTLSDRRadioProvider(MusicProvider):
     _host: str
     _port: int
     _session: aiohttp.ClientSession | None = None
+    _dab_programs_cache: list[dict] | None = None
 
     @property
     def supported_features(self) -> set[ProviderFeature]:
@@ -130,6 +147,63 @@ class RTLSDRRadioProvider(MusicProvider):
         except aiohttp.ClientError as err:
             self.logger.error("Error fetching station %s: %s", station_id, err)
             return None
+
+    async def _discover_dab_programs(self) -> list[dict]:
+        """Scan configured DAB+ channels and return discovered programs (cached)."""
+        # Return cached results if available
+        if self._dab_programs_cache is not None:
+            return self._dab_programs_cache
+
+        channels_str = self.config.get_value("dab_channels") or ""
+        if not channels_str:
+            return []
+
+        channels = [c.strip().upper() for c in channels_str.split(",") if c.strip()]
+        discovered: list[dict] = []
+
+        if not self._session:
+            return []
+
+        for channel in channels:
+            try:
+                async with self._session.get(
+                    f"{self._api_base_url}/dab/programs",
+                    params={"channel": channel},
+                ) as response:
+                    if response.status == 200:
+                        programs = await response.json()
+                        discovered.extend(programs)
+                        self.logger.info(
+                            "Discovered %d programs on DAB+ channel %s",
+                            len(programs),
+                            channel,
+                        )
+            except aiohttp.ClientError as err:
+                self.logger.warning("Failed to scan DAB+ channel %s: %s", channel, err)
+
+        # Cache results
+        self._dab_programs_cache = discovered
+        return discovered
+
+    async def _tune_dab_program(self, channel: str, service_id: int) -> bool:
+        """Tune to a discovered DAB+ program."""
+        if not self._session:
+            return False
+        try:
+            async with self._session.post(
+                f"{self._api_base_url}/dab/tune",
+                json={"channel": channel, "service_id": service_id},
+            ) as response:
+                if response.status == 200:
+                    self.logger.info(
+                        "Tuned to DAB+ channel %s, service %d", channel, service_id
+                    )
+                    return True
+                self.logger.error("Failed to tune DAB+: %s", response.status)
+                return False
+        except aiohttp.ClientError as err:
+            self.logger.error("Error tuning DAB+: %s", err)
+            return False
 
     async def _tune_to_station(self, station: dict) -> bool:
         """Tune the RTL-SDR to the station's frequency or DAB+ channel."""
@@ -235,14 +309,69 @@ class RTLSDRRadioProvider(MusicProvider):
 
         return radio
 
+    def _dab_program_to_radio(self, program: dict) -> Radio:
+        """Convert a discovered DAB+ program to a Music Assistant Radio item."""
+        # Create unique ID from channel + service_id
+        item_id = f"dab_{program['channel']}_{program['service_id']}"
+
+        radio = Radio(
+            item_id=item_id,
+            provider=self.domain,
+            name=program["name"],
+            provider_mappings={
+                ProviderMapping(
+                    item_id=item_id,
+                    provider_domain=self.domain,
+                    provider_instance=self.instance_id,
+                )
+            },
+        )
+
+        # Add metadata
+        ensemble = program.get("ensemble", "Unknown")
+        channel = program.get("channel", "")
+        bitrate = program.get("bitrate")
+        description = f"DAB+ {channel} • {ensemble}"
+        if bitrate:
+            description += f" • {bitrate}kbps"
+        radio.metadata.description = description
+
+        radio.metadata.links = UniqueList(
+            [
+                MediaItemLink(
+                    type=LinkType.WEBSITE,
+                    url=f"http://{self._host}:{self._port}",
+                )
+            ]
+        )
+
+        return radio
+
     async def get_library_radios(self) -> AsyncGenerator[Radio, None]:
         """Retrieve library/subscribed radio stations from the provider."""
+        # Fetch saved stations from backend
         stations = await self._get_stations()
         for station in stations:
             yield self._station_to_radio(station)
 
+        # Discover DAB+ programs if enabled
+        if self.config.get_value("enable_dab_discovery"):
+            programs = await self._discover_dab_programs()
+            for prog in programs:
+                yield self._dab_program_to_radio(prog)
+
     async def get_radio(self, prov_radio_id: str) -> Radio | None:
         """Get full radio station details by id."""
+        # Check if it's a discovered DAB+ program
+        if prov_radio_id.startswith("dab_"):
+            programs = await self._discover_dab_programs()
+            for prog in programs:
+                item_id = f"dab_{prog['channel']}_{prog['service_id']}"
+                if item_id == prov_radio_id:
+                    return self._dab_program_to_radio(prog)
+            return None
+
+        # Otherwise, fetch from saved stations
         station = await self._get_station(prov_radio_id)
         if station:
             return self._station_to_radio(station)
@@ -252,12 +381,21 @@ class RTLSDRRadioProvider(MusicProvider):
         self, item_id: str, media_type: MediaType
     ) -> StreamDetails:
         """Get stream details for a radio station."""
-        # Tune the RTL-SDR to the correct frequency
-        station = await self._get_station(item_id)
-        if station:
-            await self._tune_to_station(station)
+        # Check if it's a discovered DAB+ program
+        if item_id.startswith("dab_"):
+            # Parse item_id: dab_{channel}_{service_id}
+            parts = item_id.split("_")
+            if len(parts) >= 3:
+                channel = parts[1]
+                service_id = int(parts[2])
+                await self._tune_dab_program(channel, service_id)
+        else:
+            # Tune the RTL-SDR to the correct frequency for saved stations
+            station = await self._get_station(item_id)
+            if station:
+                await self._tune_to_station(station)
 
-        # Use the API stream endpoint
+        # Use the API stream endpoint (works for both FM and DAB+)
         stream_url = f"{self._api_base_url}/stream"
 
         return StreamDetails(
