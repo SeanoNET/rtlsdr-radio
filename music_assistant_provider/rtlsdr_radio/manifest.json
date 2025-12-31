@@ -5,7 +5,7 @@
   "description": "Stream FM/AM and DAB+ radio stations from RTL-SDR hardware",
   "codeowners": ["@seanonet"],
   "documentation": "https://github.com/SeanoNET/rtlsdr-radio",
-  "requirements": [],
+  "requirements": ["aiohttp"],
   "multi_instance": false,
   "icon": "radio"
 }
