@@ -1,3 +1,143 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    --radius: 0.75rem;
+  }
+
+  /* Dark theme - always applied (radio app) */
+  :root, .dark {
+    /* Background - deep slate with purple undertone */
+    --background: 222 47% 6%;
+    --foreground: 210 40% 98%;
+
+    /* Card surfaces - glassmorphism effect */
+    --card: 222 47% 9%;
+    --card-foreground: 210 40% 98%;
+
+    /* Popover/dropdown */
+    --popover: 222 47% 8%;
+    --popover-foreground: 210 40% 98%;
+
+    /* Primary - vibrant purple */
+    --primary: 270 60% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary - muted purple */
+    --secondary: 270 30% 20%;
+    --secondary-foreground: 270 20% 80%;
+
+    /* Muted - subdued slate */
+    --muted: 215 20% 20%;
+    --muted-foreground: 215 20% 60%;
+
+    /* Accent - pink/magenta */
+    --accent: 330 80% 60%;
+    --accent-foreground: 0 0% 100%;
+
+    /* Destructive - red for errors/stop */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Borders */
+    --border: 215 20% 15%;
+    --input: 215 20% 15%;
+    --ring: 270 60% 55%;
+
+    /* Sidebar specific */
+    --sidebar: 222 47% 7%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-border: 215 20% 12%;
+    --sidebar-accent: 270 60% 35%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Custom scrollbar for dark theme */
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted)) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted));
+    border-radius: 4px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground));
+  }
+}
+
+/* Audio bars animation for playing indicator */
+@keyframes audio-bar-1 {
+  0%, 100% { height: 20%; }
+  50% { height: 80%; }
+}
+
+@keyframes audio-bar-2 {
+  0%, 100% { height: 60%; }
+  50% { height: 30%; }
+}
+
+@keyframes audio-bar-3 {
+  0%, 100% { height: 40%; }
+  50% { height: 100%; }
+}
+
+@keyframes audio-bar-4 {
+  0%, 100% { height: 70%; }
+  50% { height: 25%; }
+}
+
+.audio-bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  height: 16px;
+  width: 16px;
+}
+
+.audio-bars .bar {
+  width: 3px;
+  background-color: hsl(var(--primary));
+  border-radius: 1px;
+}
+
+.audio-bars .bar:nth-child(1) {
+  animation: audio-bar-1 0.8s ease-in-out infinite;
+}
+
+.audio-bars .bar:nth-child(2) {
+  animation: audio-bar-2 0.6s ease-in-out infinite;
+}
+
+.audio-bars .bar:nth-child(3) {
+  animation: audio-bar-3 0.7s ease-in-out infinite;
+}
+
+.audio-bars .bar:nth-child(4) {
+  animation: audio-bar-4 0.9s ease-in-out infinite;
+}

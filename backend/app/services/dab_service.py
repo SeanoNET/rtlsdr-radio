@@ -492,16 +492,32 @@ class DabService:
         else:
             program_name = label_data
 
-        # Parse MOT data (DLS and slideshow)
-        mot_data = current_service.get("mot", {})
-        dls = mot_data.get("dls") if isinstance(mot_data, dict) else None
+        # Parse DLS (Dynamic Label Segment) - welle-cli uses "dls_label" at service level
+        dls = current_service.get("dls_label")
 
-        # MOT slideshow image
+        # Also check nested "mot" structure for backwards compatibility
+        mot_data = current_service.get("mot", {})
+        if not dls and isinstance(mot_data, dict):
+            dls = mot_data.get("dls") or mot_data.get("dls_label")
+
+        # MOT slideshow image - check multiple possible locations
         mot_image = None
         mot_content_type = None
+
+        # welle-cli may provide MOT data in different ways
         if isinstance(mot_data, dict):
-            mot_image = mot_data.get("mot")  # Base64 image data
-            mot_content_type = mot_data.get("mot_type", "image/jpeg")
+            # Try common field names for MOT image data
+            mot_image = (
+                mot_data.get("mot") or
+                mot_data.get("data") or
+                mot_data.get("slide") or
+                mot_data.get("image")
+            )
+            mot_content_type = mot_data.get("mot_type") or mot_data.get("content_type", "image/jpeg")
+
+        # Also check service-level MOT fields
+        if not mot_image:
+            mot_image = current_service.get("mot_data") or current_service.get("slide")
 
         # Parse PTY (program type)
         pty_label = current_service.get("pty_label")

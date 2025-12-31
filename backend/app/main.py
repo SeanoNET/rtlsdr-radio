@@ -15,6 +15,7 @@ from app.services.chromecast_service import ChromecastService
 from app.services.dab_service import DabService
 from app.services.playback_service import PlaybackService
 from app.services.tuner_service import TunerService
+from app.services.tuner_lock import TunerLockService
 
 
 @asynccontextmanager
@@ -24,6 +25,7 @@ async def lifespan(app: FastAPI):
     app.state.chromecast_service = ChromecastService()
     app.state.tuner_service = TunerService()
     app.state.dab_service = DabService()
+    app.state.tuner_lock = TunerLockService()
 
     # External stream URL for Chromecast (HTTPS required)
     external_stream_url = os.environ.get("EXTERNAL_STREAM_URL")
@@ -82,3 +84,9 @@ if static_path.exists():
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy"}
+
+
+@app.get("/api/tuner/lock/status")
+async def get_tuner_lock_status():
+    """Get current tuner lock status for debugging multi-source conflicts."""
+    return app.state.tuner_lock.get_status()
