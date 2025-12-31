@@ -107,15 +107,17 @@ class StationService:
         ]
 
         # DAB+ defaults: (name, channel, program_name, image_filename)
-        # Perth DAB+ commercial stations on 9C, ABC stations on 9A/9B
+        # Perth DAB+: Commercial multiplex on 9C
+        # Program names must match welle-cli mux.json labels exactly
+        # Note: ABC stations (Triple J, Double J) not receivable at all locations
         dab_defaults = [
+            ("Triple M", "9C", "92.9 Triple M", "triplem.png"),
             ("Nova 937", "9C", "Nova 937", "nova.webp"),
-            ("Mix 94.5", "9C", "Mix 94.5", "945.jpg"),
+            ("Mix 94.5", "9C", "Mix94.5", "945.jpg"),
             ("96FM", "9C", "96FM", "96.jpg"),
-            ("Triple M", "9C", "Triple M", "triplem.png"),
-            ("Triple J", "9B", "Triple J", "triplej.png"),
-            ("Double J", "9B", "Double J", None),
-            ("ABC Perth", "9A", "ABC Perth", "abc.png"),
+            ("Smooth FM", "9C", "Smooth FM", None),
+            ("6PR", "9C", "6PR Perth", None),
+            ("RTRFM", "9C", "RTRFM 92.1", None),
         ]
 
         created = []
