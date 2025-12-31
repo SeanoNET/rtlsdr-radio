@@ -5,13 +5,79 @@ Logo service - fetches radio station logos from RadioBrowser API.
 import hashlib
 import logging
 import os
+import re
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 from urllib.parse import urlparse
 
 import aiohttp
 
 logger = logging.getLogger(__name__)
+
+
+def generate_search_variations(station_name: str) -> List[str]:
+    """
+    Generate variations of a station name to improve RadioBrowser matching.
+
+    Examples:
+        "Nova 937" -> ["Nova 937", "Nova 93.7", "Nova"]
+        "92.9 Triple M" -> ["92.9 Triple M", "Triple M", "Triple M Perth"]
+        "ABC PERTH" -> ["ABC PERTH", "ABC Perth", "ABC"]
+    """
+    variations = []
+    name = station_name.strip()
+
+    # 1. Original name
+    variations.append(name)
+
+    # 2. Try adding decimal point to frequencies (Nova937 -> Nova 93.7)
+    freq_pattern = r'(\d{2,3})(\d)$'
+    if re.search(freq_pattern, name):
+        with_decimal = re.sub(freq_pattern, r'\1.\2', name)
+        variations.append(with_decimal)
+
+    # Also try pattern like "Nova 937" -> "Nova 93.7"
+    freq_pattern2 = r'(\d{2})(\d)\s*$'
+    match = re.search(freq_pattern2, name)
+    if match:
+        with_decimal = name[:match.start()] + match.group(1) + '.' + match.group(2)
+        variations.append(with_decimal)
+
+    # 3. Remove leading frequency numbers (92.9 Triple M -> Triple M)
+    without_freq = re.sub(r'^[\d.]+\s*', '', name).strip()
+    if without_freq and without_freq != name:
+        variations.append(without_freq)
+
+    # 4. Try with common Australian city names appended
+    cities = ['Perth', 'Sydney', 'Melbourne', 'Brisbane']
+    base_name = without_freq if without_freq else name
+    # Remove existing city suffix first
+    base_clean = re.sub(r'\s+(Perth|Sydney|Melbourne|Brisbane)$', '', base_name, flags=re.IGNORECASE)
+    for city in cities:
+        city_variation = f"{base_clean} {city}"
+        if city_variation not in variations:
+            variations.append(city_variation)
+
+    # 5. Title case variation (ABC PERTH -> ABC Perth)
+    if name.isupper():
+        title_case = name.title()
+        if title_case not in variations:
+            variations.append(title_case)
+
+    # 6. Just the base name without numbers or city
+    base_only = re.sub(r'[\d.]+', '', base_clean).strip()
+    if base_only and base_only not in variations and len(base_only) > 2:
+        variations.append(base_only)
+
+    # Remove duplicates while preserving order
+    seen = set()
+    unique = []
+    for v in variations:
+        if v.lower() not in seen and v:
+            seen.add(v.lower())
+            unique.append(v)
+
+    return unique
 
 # RadioBrowser API endpoints (fetched from all.api.radio-browser.info/json/servers)
 # These change over time - update if logo fetching stops working
@@ -87,51 +153,60 @@ class LogoService:
         return None
 
     async def _search_radio_browser(self, station_name: str) -> Optional[str]:
-        """Search RadioBrowser API for a station and return its favicon URL."""
-        # Clean up station name for search
-        search_name = station_name.strip()
+        """Search RadioBrowser API for a station and return its favicon URL.
+
+        Tries multiple name variations to improve matching success.
+        """
+        variations = generate_search_variations(station_name)
+        logger.debug("Searching RadioBrowser for %s with variations: %s", station_name, variations)
 
         async with aiohttp.ClientSession() as session:
+            headers = {"User-Agent": "rtlsdr-radio/1.0"}
+
             for server in RADIO_BROWSER_SERVERS:
                 try:
-                    url = f"{server}/json/stations/byname/{search_name}"
-                    headers = {"User-Agent": "rtlsdr-radio/1.0"}
+                    # Try each name variation
+                    for search_name in variations:
+                        # First try exact name match
+                        url = f"{server}/json/stations/byname/{search_name}"
 
-                    async with session.get(
-                        url,
-                        headers=headers,
-                        timeout=aiohttp.ClientTimeout(total=5),
-                    ) as response:
-                        if response.status != 200:
-                            continue
+                        async with session.get(
+                            url,
+                            headers=headers,
+                            timeout=aiohttp.ClientTimeout(total=5),
+                        ) as response:
+                            if response.status == 200:
+                                stations = await response.json()
+                                favicon = self._find_best_favicon(stations)
+                                if favicon:
+                                    logger.info(
+                                        "Found logo for '%s' (searched: '%s'): %s",
+                                        station_name, search_name, favicon
+                                    )
+                                    return favicon
 
-                        stations = await response.json()
-                        if not stations:
-                            # Try a more flexible search
-                            url = f"{server}/json/stations/search"
-                            params = {"name": search_name, "limit": 5}
-                            async with session.get(
-                                url,
-                                params=params,
-                                headers=headers,
-                                timeout=aiohttp.ClientTimeout(total=5),
-                            ) as search_response:
-                                if search_response.status == 200:
-                                    stations = await search_response.json()
+                        # Try flexible search
+                        url = f"{server}/json/stations/search"
+                        params = {"name": search_name, "limit": 10}
+                        async with session.get(
+                            url,
+                            params=params,
+                            headers=headers,
+                            timeout=aiohttp.ClientTimeout(total=5),
+                        ) as search_response:
+                            if search_response.status == 200:
+                                stations = await search_response.json()
+                                favicon = self._find_best_favicon(stations)
+                                if favicon:
+                                    logger.info(
+                                        "Found logo for '%s' (searched: '%s'): %s",
+                                        station_name, search_name, favicon
+                                    )
+                                    return favicon
 
-                        # Find best match with a favicon
-                        for station in stations:
-                            favicon = station.get("favicon")
-                            if favicon and favicon.strip():
-                                logger.info(
-                                    "Found logo for %s from RadioBrowser: %s",
-                                    station_name,
-                                    favicon,
-                                )
-                                return favicon
-
-                        # No favicon found in results
-                        return None
+                    # No favicon found with any variation on this server
+                    logger.debug("No logo found on %s for %s", server, station_name)
+                    return None
 
                 except aiohttp.ClientError as e:
                     logger.warning("RadioBrowser server %s failed: %s", server, e)
@@ -139,6 +214,29 @@ class LogoService:
                 except Exception as e:
                     logger.error("Error searching RadioBrowser: %s", e)
                     continue
+
+        return None
+
+    def _find_best_favicon(self, stations: list) -> Optional[str]:
+        """Find the best favicon from a list of station results.
+
+        Prioritizes stations with higher votes/clicks as they're more likely
+        to have valid, high-quality favicons.
+        """
+        if not stations:
+            return None
+
+        # Sort by votes (popularity) to get best quality icons
+        sorted_stations = sorted(
+            stations,
+            key=lambda s: (s.get("votes", 0), s.get("clickcount", 0)),
+            reverse=True
+        )
+
+        for station in sorted_stations:
+            favicon = station.get("favicon")
+            if favicon and favicon.strip():
+                return favicon.strip()
 
         return None
 

@@ -1,14 +1,43 @@
 """
 Station presets API router.
 """
-from fastapi import APIRouter, BackgroundTasks, HTTPException
-from typing import List
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from typing import List, Optional
 
 from app.models import Station, StationCreate, StationUpdate
 from app.services.station_service import get_station_service
 from app.services.logo_service import get_logo_service
 
 router = APIRouter()
+
+
+def _get_base_url(request: Request) -> str:
+    """Get the base URL for building absolute URLs.
+
+    Uses X-Forwarded headers if behind a reverse proxy.
+    """
+    scheme = request.headers.get("X-Forwarded-Proto", request.url.scheme)
+    host = request.headers.get("X-Forwarded-Host", request.headers.get("Host", request.url.netloc))
+    return f"{scheme}://{host}"
+
+
+def _make_absolute_url(image_url: Optional[str], base_url: str) -> Optional[str]:
+    """Convert a relative image URL to an absolute URL."""
+    if not image_url:
+        return None
+    if image_url.startswith("http://") or image_url.startswith("https://"):
+        return image_url  # Already absolute
+    return f"{base_url}{image_url}"
+
+
+def _stations_with_absolute_urls(stations: List[Station], base_url: str) -> List[dict]:
+    """Convert station list to dicts with absolute image URLs."""
+    result = []
+    for station in stations:
+        station_dict = station.model_dump()
+        station_dict["image_url"] = _make_absolute_url(station.image_url, base_url)
+        result.append(station_dict)
+    return result
 
 
 async def _fetch_and_update_logo(station_id: str, station_name: str):
@@ -33,13 +62,16 @@ async def _fetch_missing_logos(stations: List[Station]):
                 station_service.update(station.id, StationUpdate(image_url=logo_url))
 
 
-@router.get("", response_model=List[Station])
-async def list_stations(background_tasks: BackgroundTasks):
+@router.get("")
+async def list_stations(request: Request, background_tasks: BackgroundTasks):
     """List all station presets.
 
     If any stations are missing logos, a background task will attempt
     to fetch them from RadioBrowser. The logos will be available on
     subsequent requests.
+
+    Image URLs are returned as absolute URLs for compatibility with
+    external clients like Music Assistant.
     """
     service = get_station_service()
     stations = service.get_all()
@@ -49,7 +81,9 @@ async def list_stations(background_tasks: BackgroundTasks):
     if missing_logos:
         background_tasks.add_task(_fetch_missing_logos, missing_logos)
 
-    return stations
+    # Return with absolute URLs
+    base_url = _get_base_url(request)
+    return _stations_with_absolute_urls(stations, base_url)
 
 
 @router.post("", response_model=Station, status_code=201)
@@ -101,14 +135,19 @@ async def refresh_all_logos(background_tasks: BackgroundTasks):
     }
 
 
-@router.get("/{station_id}", response_model=Station)
-async def get_station(station_id: str):
+@router.get("/{station_id}")
+async def get_station(station_id: str, request: Request):
     """Get a specific station preset."""
     service = get_station_service()
     station = service.get(station_id)
     if not station:
         raise HTTPException(status_code=404, detail="Station not found")
-    return station
+
+    # Return with absolute URL
+    base_url = _get_base_url(request)
+    station_dict = station.model_dump()
+    station_dict["image_url"] = _make_absolute_url(station.image_url, base_url)
+    return station_dict
 
 
 @router.put("/{station_id}", response_model=Station)
