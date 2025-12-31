@@ -1,8 +1,18 @@
 # RTL-SDR Radio
 
-Stream FM/AM radio from an [RTL-SDR](https://www.rtl-sdr.com/about-rtl-sdr/) dongle to Chromecast speakers or Squeezelite players via Music Assistant.
+Stream FM/AM and DAB+ radio from an [RTL-SDR](https://www.rtl-sdr.com/about-rtl-sdr/) dongle to Chromecast speakers or via Music Assistant.
 
 ![Radio Stations in Music Assistant](docs/radio.png)
+
+## Features
+
+- **FM/AM Radio** - Tune to analog radio stations
+- **DAB+ Radio** - Receive digital radio with channel scanning
+- **Chromecast Support** - Stream directly to Chromecast/Google Home devices
+- **Music Assistant Integration** - Custom provider exposes stations as radio items
+- **Squeezelite Support** - Play to Squeezelite players via Music Assistant's Slimproto
+- **Auto-Fetch Logos** - Station artwork fetched automatically from RadioBrowser
+- **Home Assistant Automations** - Control playback via HA through Music Assistant
 
 ## Architecture
 
@@ -11,9 +21,13 @@ Stream FM/AM radio from an [RTL-SDR](https://www.rtl-sdr.com/about-rtl-sdr/) don
 │   Web Frontend  │────▶│        FastAPI Backend          │────▶│   Chromecast   │
 │     (React)     │     │                                 │     └────────────────┘
 └─────────────────┘     │  ┌───────────┐  ┌────────────┐  │
-                        │  │  rtl_fm   │─▶│  ffmpeg    │  │
+                        │  │  rtl_fm   │─▶│  ffmpeg    │  │◀── FM/AM
                         │  │  process  │  │  transcoder│  │
                         │  └───────────┘  └────────────┘  │
+                        │                                 │
+                        │  ┌───────────────────────────┐  │
+                        │  │   welle-cli (DAB+)        │  │◀── DAB+
+                        │  └───────────────────────────┘  │
                         └─────────────────────────────────┘
                                         │
                                         ▼
@@ -29,15 +43,7 @@ Stream FM/AM radio from an [RTL-SDR](https://www.rtl-sdr.com/about-rtl-sdr/) don
                         └─────────────────────────────────┘
 ```
 
-## Features
-
-- **Web UI** - Browse and play station presets
-- **Chromecast Support** - Stream directly to Chromecast/Google Home devices
-- **Music Assistant Integration** - Custom provider exposes stations as radio items
-- **Squeezelite Support** - Play to Squeezelite players via Music Assistant's Slimproto
-- **Home Assistant Automations** - Control playback via HA automations through Music Assistant
-
-## Quick Start (Docker)
+## Quick Start
 
 ```bash
 # Clone the repository
@@ -46,52 +52,13 @@ cd rtlsdr-radio
 
 # Start all services
 docker-compose up -d
-
-# Frontend: http://localhost
-# Backend API: http://localhost:8000
-# Music Assistant: http://localhost:8095
 ```
 
-## Docker Services
-
-| Service | Port | Description |
-|---------|------|-------------|
-| Frontend | 80 | React web UI |
-| Backend | 8000 | FastAPI REST API |
-| Music Assistant | 8095 | Music Assistant with RTL-SDR provider |
-
-## Music Assistant Setup
-
-1. Open Music Assistant at `http://localhost:8095`
-2. Go to **Settings → Providers → Add Provider**
-3. Select **RTL-SDR Radio**
-4. Configure:
-   - **Host**: `rtlsdr-backend` (or `localhost` if using host networking)
-   - **Port**: `8000`
-5. Click **Save**
-6. Your stations will appear in **Radio** section
-
-![RTL-SDR Radio Provider](docs/ma-radio-provider.png)
-
-![Radio Stations List](docs/ma-radio-list.png)
-
-## Home Assistant Automations
-
-Once Music Assistant is connected to Home Assistant, you can control radio playback via automations:
-
-```yaml
-# Play a station
-service: mass.play_media
-data:
-  media_id: "Nova 93.7"
-  entity_id: media_player.kitchen_speaker
-
-# Play by station ID
-service: mass.play_media
-data:
-  media_id: "rtlsdr_radio://station_id"
-  entity_id: media_player.office_speaker
-```
+| Service | Port | URL |
+|---------|------|-----|
+| Frontend | 80 | http://localhost |
+| Backend API | 8000 | http://localhost:8000 |
+| Music Assistant | 8095 | http://localhost:8095 |
 
 ## Configuration
 
@@ -99,44 +66,94 @@ data:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `EXTERNAL_STREAM_URL` | _(none)_ | HTTPS URL for Chromecast streaming |
+| `EXTERNAL_STREAM_URL` | _(none)_ | HTTPS URL for Chromecast streaming (required for Chromecast) |
+| `DEFAULT_STATIONS` | `all` | Station presets mode (see below) |
 
-### Chromecast HTTPS Requirement
+### DEFAULT_STATIONS Modes
 
-Chromecast devices require HTTPS URLs. Set up a reverse proxy with SSL and configure `EXTERNAL_STREAM_URL`.
+| Mode | Description |
+|------|-------------|
+| `all` | FM defaults + DAB+ discovery enabled (default) |
+| `fm` | FM stations only |
+| `dab` | DAB+ only - use channel scan to discover stations |
+| `none` | No default stations - start empty |
 
-## API Reference
+The default FM stations are example presets for Perth, WA. You can delete these and add your own local stations.
 
-### Stations
+## Music Assistant Setup
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/stations` | GET | List all station presets |
-| `/api/stations` | POST | Create a new station |
-| `/api/stations/{id}` | GET | Get station details |
-| `/api/stations/{id}` | PUT | Update a station |
-| `/api/stations/{id}` | DELETE | Delete a station |
+1. Open Music Assistant at `http://localhost:8095`
+2. Go to **Settings → Providers → Add Provider**
+3. Select **RTL-SDR Radio**
+4. Configure:
+   - **Host**: `rtlsdr-backend` (or your backend IP)
+   - **Port**: `8000`
+5. Click **Save**
 
-### Speakers (Chromecast)
+### DAB+ Auto-Discovery (Optional)
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/speakers` | GET | List all Chromecast speakers |
-| `/api/speakers/{id}/volume` | PUT | Set volume (0.0-1.0) |
+Enable automatic discovery of DAB+ programs:
 
-### Playback
+| Setting | Description |
+|---------|-------------|
+| **Enable DAB+ Auto-Discovery** | Scan configured channels on sync |
+| **DAB+ Channels to Scan** | Comma-separated channel IDs (e.g., `9A,9B,9C`) |
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/playback/status` | GET | Get playback status |
-| `/api/playback/start` | POST | Start playback |
-| `/api/playback/stop` | POST | Stop playback |
+Discovered DAB+ programs will appear alongside your saved stations in Music Assistant.
 
-### Stream
+![RTL-SDR Radio Provider](docs/ma-radio-provider.png)
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/stream` | GET | Raw MP3 audio stream |
+## Using DAB+ Radio
+
+### Web UI
+
+1. Select a speaker (browser or Chromecast)
+2. Choose a DAB+ channel from the dropdown
+3. Click **Scan** to discover programs
+4. Click a program to play, or **Add** to save it as a station
+
+### Adding DAB+ Stations
+
+DAB+ stations require:
+- **Channel**: The DAB+ channel (e.g., `9A`, `9B`, `9C`)
+- **Program Name**: The station name on that channel
+- **Service ID**: Unique identifier for the program
+
+## Home Assistant Automations
+
+Control radio playback via Home Assistant automations through Music Assistant:
+
+```yaml
+service: mass.play_media
+data:
+  media_id: "Nova 93.7"
+  entity_id: media_player.kitchen_speaker
+```
+
+## API
+
+The backend provides a REST API for all operations.
+
+- **Interactive docs**: http://localhost:8000/docs
+- **OpenAPI spec**: http://localhost:8000/openapi.json
+
+Key endpoints:
+- `GET /api/stations` - List stations
+- `GET /api/dab/channels` - List DAB+ channels
+- `GET /api/dab/programs?channel=9A` - Scan for programs
+- `GET /api/stream` - Audio stream (MP3)
+
+## Migration Notes
+
+### LMS/Squeezebox Users
+
+Direct Squeezebox/LMS player control has been removed. To play to Squeezelite players:
+
+1. Install the **Slimproto provider** in Music Assistant
+2. Configure your Squeezelite players in MA
+3. RTL-SDR Radio stations will be available as radio sources
+
+This approach provides better integration with Home Assistant and other MA features.
 
 ## Development
 
@@ -181,3 +198,9 @@ sudo udevadm control --reload-rules
 
 - Ensure devices are on the same network
 - Check firewall allows mDNS (port 5353 UDP)
+
+### DAB+ not working
+
+- Ensure `welle-cli` is installed in the backend container
+- Check your RTL-SDR supports the DAB+ frequency range
+- Try different channels - not all channels have active multiplexes in your area
