@@ -164,11 +164,11 @@ async def get_audio_stream(request: Request):
                 bitrate=bitrate,
                 metaint=ICY_METAINT,
             ))
-            # Build slide URL for album art if external base URL is configured
-            slide_url = None
-            external_base = getattr(request.app.state, "external_base_url", None)
-            if external_base:
-                slide_url = f"{external_base.rstrip('/')}/api/dab/slide"
+            # Build slide URL for album art from request
+            # Use X-Forwarded headers if behind reverse proxy, otherwise use request URL
+            scheme = request.headers.get("X-Forwarded-Proto", request.url.scheme)
+            host = request.headers.get("X-Forwarded-Host", request.headers.get("Host", request.url.netloc))
+            slide_url = f"{scheme}://{host}/api/dab/slide"
             generator = dab_icy_stream_generator(dab_service, slide_url=slide_url)
         else:
             generator = dab_audio_stream_generator(dab_service)
