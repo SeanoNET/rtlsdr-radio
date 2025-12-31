@@ -30,6 +30,10 @@ async def lifespan(app: FastAPI):
     # External stream URL for Chromecast (HTTPS required)
     external_stream_url = os.environ.get("EXTERNAL_STREAM_URL")
 
+    # External base URL for Music Assistant (for album art in ICY metadata)
+    # e.g., "http://192.168.1.100:8000" or "http://rtlsdr-radio:8000"
+    app.state.external_base_url = os.environ.get("EXTERNAL_BASE_URL")
+
     app.state.playback_service = PlaybackService(
         tuner_service=app.state.tuner_service,
         dab_service=app.state.dab_service,

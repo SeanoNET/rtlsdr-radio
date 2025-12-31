@@ -64,12 +64,13 @@ async def dab_audio_stream_generator(dab_service):
                 break
 
 
-async def dab_icy_stream_generator(dab_service):
+async def dab_icy_stream_generator(dab_service, slide_url: Optional[str] = None):
     """
     Generate DAB+ audio stream with ICY metadata injection.
 
     Polls DAB+ metadata every METADATA_POLL_INTERVAL seconds and
     injects DLS (Dynamic Label Segment) as StreamTitle.
+    Optionally includes StreamUrl for album art (MOT slideshow).
     """
     injector = IcyMetadataInjector(ICY_METAINT)
     last_meta_update = 0.0
@@ -82,12 +83,15 @@ async def dab_icy_stream_generator(dab_service):
             try:
                 metadata = await dab_service.get_metadata()
                 if metadata and metadata.dls and metadata.dls != last_dls:
-                    injector.set_metadata(metadata.dls)
+                    # Include slide URL if MOT image is available
+                    url = slide_url if metadata.mot_image else None
+                    injector.set_metadata(metadata.dls, url=url)
                     last_dls = metadata.dls
                 elif metadata and metadata.program and not metadata.dls:
                     # Fallback to program name if no DLS
                     if metadata.program != last_dls:
-                        injector.set_metadata(metadata.program)
+                        url = slide_url if metadata.mot_image else None
+                        injector.set_metadata(metadata.program, url=url)
                         last_dls = metadata.program
             except Exception:
                 pass  # Don't interrupt stream on metadata errors
@@ -160,7 +164,12 @@ async def get_audio_stream(request: Request):
                 bitrate=bitrate,
                 metaint=ICY_METAINT,
             ))
-            generator = dab_icy_stream_generator(dab_service)
+            # Build slide URL for album art if external base URL is configured
+            slide_url = None
+            external_base = getattr(request.app.state, "external_base_url", None)
+            if external_base:
+                slide_url = f"{external_base.rstrip('/')}/api/dab/slide"
+            generator = dab_icy_stream_generator(dab_service, slide_url=slide_url)
         else:
             generator = dab_audio_stream_generator(dab_service)
 

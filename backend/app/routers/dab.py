@@ -4,7 +4,10 @@ DAB+ radio API router.
 
 from typing import List, Optional
 
+import base64
+
 from fastapi import APIRouter, HTTPException, Header, Request
+from fastapi.responses import Response
 
 from app.models import (
     DabChannel,
@@ -181,3 +184,40 @@ async def get_raw_mux_json(request: Request):
                 }
     except Exception as e:
         return {"error": str(e), "is_running": True}
+
+
+@router.get("/slide")
+async def get_current_slide(request: Request):
+    """
+    Get the current MOT slideshow image.
+
+    Returns the image directly with appropriate content-type header.
+    Use this endpoint for Music Assistant StreamUrl or other clients
+    that need a direct image URL.
+
+    Returns 204 No Content if no slide is available.
+    """
+    dab_service = request.app.state.dab_service
+
+    if not dab_service.is_running:
+        return Response(status_code=204)
+
+    try:
+        metadata = await dab_service.get_metadata()
+
+        if not metadata.mot_image:
+            return Response(status_code=204)
+
+        # Decode base64 image
+        image_data = base64.b64decode(metadata.mot_image)
+        content_type = metadata.mot_content_type or "image/jpeg"
+
+        return Response(
+            content=image_data,
+            media_type=content_type,
+            headers={
+                "Cache-Control": "no-cache, max-age=0",
+            }
+        )
+    except Exception:
+        return Response(status_code=204)
