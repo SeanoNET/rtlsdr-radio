@@ -86,9 +86,9 @@ class StationService:
         """Create default station presets based on DEFAULT_STATIONS env var.
 
         Env var options:
-            - "dab" or "dab+" : Only DAB+ stations (for DAB+ antenna setups)
+            - "dab" or "dab+" : DAB+ only mode, no hardcoded defaults (use scan to discover)
             - "fm" : Only FM stations (for FM antenna setups)
-            - "all" or "both" : Both FM and DAB+ stations (default)
+            - "all" or "both" : FM defaults + DAB+ discovery mode (default)
             - "none" : No default stations
         """
         mode = self._default_mode
@@ -104,20 +104,6 @@ class StationService:
             ("96FM", 96.1, Modulation.WFM, "96.jpg"),
             ("Triple M Perth", 92.9, Modulation.WFM, "triplem.png"),
             ("Triple J", 99.3, Modulation.WFM, "triplej.png"),
-        ]
-
-        # DAB+ defaults: (name, channel, program_name, image_filename)
-        # Perth DAB+: Commercial multiplex on 9C
-        # Program names must match welle-cli mux.json labels exactly
-        # Note: ABC stations (Triple J, Double J) not receivable at all locations
-        dab_defaults = [
-            ("Triple M", "9C", "92.9 Triple M", "triplem.png"),
-            ("Nova 937", "9C", "Nova 937", "nova.webp"),
-            ("Mix 94.5", "9C", "Mix94.5", "945.jpg"),
-            ("96FM", "9C", "96FM", "96.jpg"),
-            ("Smooth FM", "9C", "Smooth FM", None),
-            ("6PR", "9C", "6PR Perth", None),
-            ("RTRFM", "9C", "RTRFM 92.1", None),
         ]
 
         created = []
@@ -137,20 +123,10 @@ class StationService:
                 )
             created.append("FM")
 
-        # Create DAB+ defaults
-        if mode in ("dab", "dab+", "all", "both"):
-            for name, channel, program, image in dab_defaults:
-                image_url = f"/static/images/stations/{image}" if image else None
-                self.create(
-                    StationCreate(
-                        name=name,
-                        station_type=StationType.DAB,
-                        dab_channel=channel,
-                        dab_program=program,
-                        image_url=image_url,
-                    )
-                )
-            created.append("DAB+")
+        # DAB+ mode: No hardcoded defaults - programs are discovered dynamically via channel scan
+        # Users add stations from the programs found on their local DAB+ multiplex
+        if mode in ("dab", "dab+"):
+            logger.info("DAB+ mode: Use channel scan to discover available programs")
 
         if created:
             logger.info(f"Created default {' and '.join(created)} station presets (Perth, WA)")
