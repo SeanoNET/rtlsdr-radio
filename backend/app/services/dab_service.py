@@ -27,6 +27,7 @@ class DabService:
         self._welle_port = welle_port
         self._lock = asyncio.Lock()
         self._http_session: Optional[aiohttp.ClientSession] = None
+        self._audio_response: Optional[aiohttp.ClientResponse] = None
 
     @property
     def is_running(self) -> bool:
@@ -280,9 +281,48 @@ class DabService:
 
         return results
 
+    async def _connect_audio_stream(self) -> bool:
+        """Establish persistent connection to welle-cli audio stream."""
+        if self._audio_response is not None:
+            return True
+
+        url = self.stream_url
+        if not url:
+            return False
+
+        try:
+            session = await self._get_http_session()
+            # Use a long timeout for streaming - welle-cli streams continuously
+            self._audio_response = await session.get(
+                url,
+                timeout=aiohttp.ClientTimeout(total=None, sock_read=5),
+            )
+            if self._audio_response.status != 200:
+                logger.error(f"Failed to connect to audio stream: HTTP {self._audio_response.status}")
+                await self._disconnect_audio_stream()
+                return False
+            logger.debug(f"Connected to audio stream: {url}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to connect to audio stream: {e}")
+            await self._disconnect_audio_stream()
+            return False
+
+    async def _disconnect_audio_stream(self):
+        """Close persistent audio stream connection."""
+        if self._audio_response is not None:
+            try:
+                self._audio_response.close()
+            except Exception:
+                pass
+            self._audio_response = None
+            logger.debug("Disconnected from audio stream")
+
     async def read_audio_chunk(self, chunk_size: int = 4096) -> Optional[bytes]:
         """
         Read a chunk of audio data from welle-cli stream.
+
+        Uses a persistent HTTP connection to avoid reconnection overhead.
 
         Args:
             chunk_size: Number of bytes to read.
@@ -290,37 +330,31 @@ class DabService:
         Returns:
             Audio data bytes or None if not available.
         """
-        stream_url = self.stream_url
-        if not stream_url:
-            return None
+        # Ensure we have a connection
+        if self._audio_response is None:
+            if not await self._connect_audio_stream():
+                return None
 
         try:
-            session = await self._get_http_session()
-
-            # For streaming, we need a persistent connection
-            # This is called repeatedly, so we use a simple request per chunk
-            # In production, you'd want to keep the connection open
-            async with session.get(
-                stream_url,
-                timeout=aiohttp.ClientTimeout(total=5, sock_read=2),
-            ) as response:
-                if response.status != 200:
-                    return None
-
-                chunk = await response.content.read(chunk_size)
-                return chunk if chunk else None
-
+            chunk = await self._audio_response.content.read(chunk_size)
+            return chunk if chunk else None
         except asyncio.TimeoutError:
+            logger.debug("Audio stream read timeout")
             return None
         except aiohttp.ClientError as e:
-            logger.debug(f"Error reading audio chunk: {e}")
+            logger.debug(f"Audio stream error, reconnecting: {e}")
+            await self._disconnect_audio_stream()
             return None
         except Exception as e:
             logger.error(f"Error reading audio chunk: {e}")
+            await self._disconnect_audio_stream()
             return None
 
     async def _stop_process(self):
         """Stop welle-cli process."""
+        # Disconnect audio stream first
+        await self._disconnect_audio_stream()
+
         if self._welle_process and self._welle_process.poll() is None:
             logger.debug("Stopping welle-cli process")
             self._welle_process.terminate()

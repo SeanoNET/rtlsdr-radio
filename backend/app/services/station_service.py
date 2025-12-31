@@ -154,8 +154,13 @@ class StationService:
             logger.info(f"Created default {' and '.join(created)} station presets (Perth, WA)")
 
     def get_all(self) -> List[Station]:
-        """Get all stations."""
-        return list(self._stations.values())
+        """Get all stations, filtered by current mode."""
+        mode = self._get_current_mode()
+        if mode in ("dab", "dab+"):
+            return [s for s in self._stations.values() if s.station_type == StationType.DAB]
+        elif mode == "fm":
+            return [s for s in self._stations.values() if s.station_type == StationType.FM]
+        return list(self._stations.values())  # "all" or "both"
 
     def get(self, station_id: str) -> Optional[Station]:
         """Get a station by ID."""
