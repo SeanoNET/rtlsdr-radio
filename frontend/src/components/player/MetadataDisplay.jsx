@@ -32,7 +32,7 @@ function ScrollingDLS({ text }) {
     <div
       ref={containerRef}
       className={cn(
-        "dls-container max-w-md mx-auto overflow-hidden",
+        "dls-container w-48 mx-auto overflow-hidden",
         !shouldScroll && "flex justify-center"
       )}
     >

@@ -442,9 +442,10 @@ class DabService:
                 metadata = self._parse_metadata(data)
 
                 # Fetch MOT slideshow image from separate endpoint
-                mot_image = await self._fetch_mot_image()
+                mot_image, mot_content_type = await self._fetch_mot_image()
                 if mot_image:
                     metadata.mot_image = mot_image
+                    metadata.mot_content_type = mot_content_type
 
                 return metadata
 
@@ -467,15 +468,15 @@ class DabService:
                 is_playing=True,
             )
 
-    async def _fetch_mot_image(self) -> Optional[str]:
+    async def _fetch_mot_image(self) -> tuple[Optional[str], Optional[str]]:
         """
         Fetch MOT slideshow image from welle-cli's /slide endpoint.
 
         Returns:
-            Base64-encoded image string, or None if not available.
+            Tuple of (base64_encoded_image, content_type), or (None, None) if not available.
         """
         if not self._service_id:
-            return None
+            return None, None
 
         try:
             # welle-cli serves slides at /slide/{hex_service_id}
@@ -487,29 +488,29 @@ class DabService:
                 timeout=aiohttp.ClientTimeout(total=3),
             ) as response:
                 if response.status != 200:
-                    return None
+                    return None, None
 
                 # Check content type
                 content_type = response.headers.get("Content-Type", "")
                 if not content_type.startswith("image/"):
-                    return None
+                    return None, None
 
                 # Read and base64 encode the image
                 image_data = await response.read()
                 if not image_data or len(image_data) < 100:
                     # Too small to be a valid image
-                    return None
+                    return None, None
 
                 import base64
                 encoded = base64.b64encode(image_data).decode("utf-8")
-                return f"data:{content_type};base64,{encoded}"
+                return encoded, content_type
 
         except asyncio.TimeoutError:
             logger.debug("Timeout fetching MOT slide")
-            return None
+            return None, None
         except Exception as e:
             logger.debug(f"Error fetching MOT slide: {e}")
-            return None
+            return None, None
 
     def _parse_metadata(self, data: dict) -> DabMetadata:
         """Parse welle-cli mux.json response into DabMetadata."""
