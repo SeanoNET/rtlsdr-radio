@@ -204,9 +204,9 @@ class LogoService:
                                     )
                                     return favicon
 
-                    # No favicon found with any variation on this server
+                    # No favicon found with any variation on this server, try next
                     logger.debug("No logo found on %s for %s", server, station_name)
-                    return None
+                    break  # Try next server instead of returning
 
                 except aiohttp.ClientError as e:
                     logger.warning("RadioBrowser server %s failed: %s", server, e)
