@@ -176,6 +176,13 @@ export default function RadioApp() {
   const isPlaying = playbackStatus?.state === "playing" || browserPlaying;
   const isPaused = playbackStatus?.state === "paused";
 
+  // Computed browser station info for display (handles browser-only DAB+ playback)
+  const browserStation = browserPlaying && selectedStation
+    ? stations.find(s => s.id === selectedStation)
+    : null;
+  const isBrowserDab = browserStation?.station_type === "dab";
+  const isBrowserFm = browserStation?.station_type === "fm" || (browserPlaying && !browserStation);
+
   const handlePlay = async () => {
     if (!selectedSpeaker) {
       setError("Please select a speaker");
@@ -515,24 +522,39 @@ export default function RadioApp() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-400">
-                  Now Playing {playbackStatus.radio_mode === "dab" ? "(DAB+)" : playbackStatus.radio_mode === "fm" ? "(FM)" : ""}
+                  Now Playing {
+                    playbackStatus.radio_mode === "dab" || isBrowserDab
+                      ? "(DAB+)"
+                      : playbackStatus.radio_mode === "fm" || isBrowserFm
+                        ? "(FM)"
+                        : ""
+                  }
                 </p>
                 <p className="text-2xl font-semibold">
                   {playbackStatus.radio_mode === "dab"
                     ? (playbackStatus.dab_program || playbackStatus.dab_channel || "DAB+")
-                    : playbackStatus.frequency
-                      ? `${playbackStatus.frequency} MHz`
-                      : "Not tuned"}
+                    : isBrowserDab
+                      ? (browserStation?.dab_program || browserStation?.name || "DAB+")
+                      : playbackStatus.frequency
+                        ? `${playbackStatus.frequency} MHz`
+                        : browserStation
+                          ? (browserStation.frequency ? `${browserStation.frequency} MHz` : browserStation.name)
+                          : "Not tuned"}
                 </p>
-                {playbackStatus.radio_mode === "dab" && playbackStatus.dab_channel && (
+                {(playbackStatus.radio_mode === "dab" && playbackStatus.dab_channel) || (isBrowserDab && browserStation?.dab_channel) ? (
                   <p className="text-sm text-slate-400">
-                    Channel {playbackStatus.dab_channel}
+                    Channel {playbackStatus.dab_channel || browserStation?.dab_channel}
                   </p>
-                )}
+                ) : null}
                 {playbackStatus.device_name && (
                   <p className="text-sm text-purple-400">
                     {playbackStatus.device_type === "lms" ? "🔊" : "📺"}{" "}
                     {playbackStatus.device_name}
+                  </p>
+                )}
+                {browserPlaying && !playbackStatus.device_name && (
+                  <p className="text-sm text-purple-400">
+                    🔊 Browser
                   </p>
                 )}
               </div>
@@ -547,76 +569,90 @@ export default function RadioApp() {
               />
             </div>
 
-            {/* DAB+ Metadata - Now Playing info */}
-            {dabMetadata && dabMetadata.is_playing && (
+            {/* Now Playing Info - Shows for both FM and DAB+ */}
+            {isPlaying && (
               <div className="mt-4 pt-4 border-t border-white/10">
-                {/* DLS - Now Playing Text */}
-                {dabMetadata.dls && (
-                  <div className="mb-3">
-                    <p className="text-xs text-slate-500 uppercase tracking-wide mb-1">Now Playing</p>
-                    <p className="text-lg text-purple-300">{dabMetadata.dls}</p>
+                <div className="flex gap-4">
+                  {/* Station Image / MOT Slideshow */}
+                  <div className="flex-shrink-0">
+                    {dabMetadata?.mot_image ? (
+                      <img
+                        src={`data:${dabMetadata.mot_content_type || 'image/jpeg'};base64,${dabMetadata.mot_image}`}
+                        alt="Station slideshow"
+                        className="w-24 h-24 rounded-lg object-cover"
+                      />
+                    ) : browserStation?.image_url ? (
+                      <img
+                        src={browserStation.image_url.startsWith('/') ? `${API_BASE.replace('/api', '')}${browserStation.image_url}` : browserStation.image_url}
+                        alt={browserStation.name}
+                        className="w-24 h-24 rounded-lg object-cover"
+                      />
+                    ) : (
+                      <div className="w-24 h-24 rounded-lg bg-gradient-to-br from-purple-600/30 to-blue-600/30 flex items-center justify-center border border-white/10">
+                        <span className="text-3xl">📻</span>
+                      </div>
+                    )}
                   </div>
-                )}
 
-                {/* MOT Slideshow Image */}
-                {dabMetadata.mot_image && (
-                  <div className="mb-3">
-                    <img
-                      src={`data:${dabMetadata.mot_content_type || 'image/jpeg'};base64,${dabMetadata.mot_image}`}
-                      alt="Station slideshow"
-                      className="max-w-full h-auto rounded-lg max-h-32 object-contain"
-                    />
-                  </div>
-                )}
+                  {/* Station Info */}
+                  <div className="flex-1 min-w-0">
+                    {/* Station Name */}
+                    <p className="text-lg font-medium text-white truncate">
+                      {dabMetadata?.program || browserStation?.name || "Radio"}
+                    </p>
 
-                {/* Signal Quality and Audio Info */}
-                <div className="flex flex-wrap gap-4 text-sm">
-                  {/* Signal Quality */}
-                  {dabMetadata.signal && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-400">Signal:</span>
-                      <div className="flex items-center gap-1">
-                        {/* Signal bars visualization */}
-                        {[1, 2, 3, 4, 5].map((bar) => {
-                          const quality = dabMetadata.signal.fic_quality || 0;
-                          const isActive = quality >= bar * 20;
-                          return (
-                            <div
-                              key={bar}
-                              className={`w-1 rounded-sm transition-all ${
-                                isActive ? "bg-green-500" : "bg-slate-600"
-                              }`}
-                              style={{ height: `${bar * 3 + 4}px` }}
-                            />
-                          );
-                        })}
-                        {dabMetadata.signal.snr !== null && (
-                          <span className="text-slate-400 ml-1">
-                            {dabMetadata.signal.snr?.toFixed(1)} dB
+                    {/* DLS - Now Playing Text (DAB+ only) */}
+                    {dabMetadata?.dls && (
+                      <p className="text-purple-300 text-sm mt-1 line-clamp-2">{dabMetadata.dls}</p>
+                    )}
+
+                    {/* FM frequency display */}
+                    {!isBrowserDab && browserStation?.frequency && (
+                      <p className="text-slate-400 text-sm mt-1">{browserStation.frequency} MHz</p>
+                    )}
+
+                    {/* DAB+ Signal and Audio Info */}
+                    {dabMetadata?.is_playing && (
+                      <div className="flex flex-wrap gap-3 mt-2 text-xs">
+                        {/* Signal Quality */}
+                        {dabMetadata.signal && (
+                          <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-0.5">
+                              {[1, 2, 3, 4, 5].map((bar) => {
+                                const quality = dabMetadata.signal.fic_quality || 0;
+                                const isActive = quality >= bar * 20;
+                                return (
+                                  <div
+                                    key={bar}
+                                    className={`w-1 rounded-sm ${isActive ? "bg-green-500" : "bg-slate-600"}`}
+                                    style={{ height: `${bar * 2 + 4}px` }}
+                                  />
+                                );
+                              })}
+                            </div>
+                            {dabMetadata.signal.snr !== null && (
+                              <span className="text-slate-400 ml-1">
+                                {dabMetadata.signal.snr?.toFixed(1)} dB
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Audio Mode */}
+                        {dabMetadata.audio?.mode && (
+                          <span className="text-slate-400">
+                            {dabMetadata.audio.mode}
+                            {dabMetadata.audio.bitrate && ` ${dabMetadata.audio.bitrate}kbps`}
                           </span>
                         )}
+
+                        {/* Program Type */}
+                        {dabMetadata.pty && (
+                          <span className="text-slate-400">{dabMetadata.pty}</span>
+                        )}
                       </div>
-                    </div>
-                  )}
-
-                  {/* Audio Mode */}
-                  {dabMetadata.audio?.mode && (
-                    <div className="flex items-center gap-1">
-                      <span className="text-slate-400">Audio:</span>
-                      <span className="text-slate-300">{dabMetadata.audio.mode}</span>
-                      {dabMetadata.audio.bitrate && (
-                        <span className="text-slate-400">({dabMetadata.audio.bitrate} kbps)</span>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Program Type */}
-                  {dabMetadata.pty && (
-                    <div className="flex items-center gap-1">
-                      <span className="text-slate-400">Genre:</span>
-                      <span className="text-slate-300">{dabMetadata.pty}</span>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
             )}

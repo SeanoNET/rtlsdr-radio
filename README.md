@@ -9,6 +9,7 @@ Stream FM/AM and DAB+ radio from an [RTL-SDR](https://www.rtl-sdr.com/about-rtl-
 - **FM/AM Radio** - Tune to analog radio stations
 - **DAB+ Radio** - Receive digital radio with channel scanning
 - **DAB+ Now Playing** - Real-time DLS text, MOT slideshow images, signal quality, and program type
+- **ICY Metadata** - "Now playing" info embedded in stream for Music Assistant and VLC
 - **Chromecast Support** - Stream directly to Chromecast/Google Home devices
 - **Music Assistant Integration** - Custom provider exposes stations as radio items
 - **Squeezelite Support** - Play to Squeezelite players via Music Assistant's Slimproto
@@ -156,7 +157,25 @@ Key endpoints:
 - `GET /api/stations` - List stations
 - `GET /api/dab/channels` - List DAB+ channels
 - `GET /api/dab/programs?channel=9A` - Scan for programs
+- `GET /api/dab/metadata` - Current DAB+ metadata (DLS, signal, PTY)
 - `GET /api/stream` - Audio stream (MP3)
+
+### ICY Metadata (Now Playing)
+
+The stream endpoint supports ICY (Shoutcast/Icecast) metadata for clients that request it:
+
+```bash
+# Request stream with metadata
+curl -H "Icy-MetaData: 1" http://localhost:8000/api/stream
+```
+
+When `Icy-MetaData: 1` header is present:
+- Response includes `icy-metaint` header (bytes between metadata frames)
+- Audio stream contains embedded metadata with `StreamTitle` (now playing text)
+- DAB+ streams include DLS (Dynamic Label Segment) as the title
+- FM streams show the station name
+
+This enables "now playing" display in Music Assistant, VLC, and other ICY-compatible players.
 
 ## Migration Notes
 
@@ -222,12 +241,13 @@ sudo udevadm control --reload-rules
 
 ## Future Improvements
 
-The following features require upstream changes to Music Assistant:
+The following features may require upstream changes to Music Assistant:
 
-| Feature | Description |
-|---------|-------------|
-| **Real-time "Now Playing"** | Display DLS/MOT metadata in Music Assistant UI |
-| **Live Metadata in Home Assistant** | Stream current track info to HA media player entities |
-| **TPEG Traffic Data** | Parse and display traffic/travel information from DAB+ broadcasts |
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **Now Playing via ICY** | ✅ Implemented | DAB+ DLS metadata embedded in stream via ICY protocol |
+| **MOT Slideshow in MA** | Requires MA changes | Display slideshow images in Music Assistant UI |
+| **Live Metadata in HA** | Depends on player | ICY-compatible players may expose metadata to HA |
+| **TPEG Traffic Data** | Future | Parse traffic/travel information from DAB+ broadcasts |
 
-These features work in the web UI but cannot be pushed to Music Assistant due to its static provider model. The MA provider currently exposes PTY (genre) information for discovered DAB+ programs.
+**ICY Metadata**: The stream now includes ICY metadata with "now playing" information. Players that support ICY (VLC, most streaming clients, and Music Assistant with Slimproto) will display the current track info. The web UI shows full DAB+ metadata including slideshows and signal quality.
