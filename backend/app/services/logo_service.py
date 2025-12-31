@@ -48,8 +48,13 @@ def generate_search_variations(station_name: str) -> List[str]:
     if without_freq and without_freq != name:
         variations.append(without_freq)
 
-    # 4. Try with common Australian city names appended
+    # 4. Remove trailing city name from original (6PR Perth -> 6PR)
     cities = ['Perth', 'Sydney', 'Melbourne', 'Brisbane']
+    without_city = re.sub(r'\s+(Perth|Sydney|Melbourne|Brisbane)$', '', name, flags=re.IGNORECASE)
+    if without_city and without_city != name and without_city not in variations:
+        variations.append(without_city)
+
+    # 5. Try with common Australian city names appended
     base_name = without_freq if without_freq else name
     # Remove existing city suffix first
     base_clean = re.sub(r'\s+(Perth|Sydney|Melbourne|Brisbane)$', '', base_name, flags=re.IGNORECASE)
@@ -58,13 +63,13 @@ def generate_search_variations(station_name: str) -> List[str]:
         if city_variation not in variations:
             variations.append(city_variation)
 
-    # 5. Title case variation (ABC PERTH -> ABC Perth)
+    # 6. Title case variation (ABC PERTH -> ABC Perth)
     if name.isupper():
         title_case = name.title()
         if title_case not in variations:
             variations.append(title_case)
 
-    # 6. Just the base name without numbers or city
+    # 7. Just the base name without numbers or city
     base_only = re.sub(r'[\d.]+', '', base_clean).strip()
     if base_only and base_only not in variations and len(base_only) > 2:
         variations.append(base_only)
