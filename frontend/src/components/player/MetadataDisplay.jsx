@@ -1,6 +1,53 @@
 import * as React from "react"
+import { useState, useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
 import { SignalQuality } from "./SignalQuality"
+
+/**
+ * Scrolling DLS (Dynamic Label Segment) text component.
+ * Only scrolls if text overflows the container.
+ */
+function ScrollingDLS({ text }) {
+  const containerRef = useRef(null)
+  const textRef = useRef(null)
+  const [shouldScroll, setShouldScroll] = useState(false)
+
+  // Check if text overflows container
+  useEffect(() => {
+    const checkOverflow = () => {
+      if (containerRef.current && textRef.current) {
+        const containerWidth = containerRef.current.offsetWidth
+        const textWidth = textRef.current.scrollWidth
+        setShouldScroll(textWidth > containerWidth)
+      }
+    }
+
+    checkOverflow()
+    // Recheck on window resize
+    window.addEventListener("resize", checkOverflow)
+    return () => window.removeEventListener("resize", checkOverflow)
+  }, [text])
+
+  return (
+    <div
+      ref={containerRef}
+      className={cn(
+        "dls-container max-w-md mx-auto overflow-hidden",
+        !shouldScroll && "flex justify-center"
+      )}
+    >
+      <p
+        ref={textRef}
+        className={cn(
+          "text-purple-400 text-sm whitespace-nowrap inline-block",
+          shouldScroll && "dls-text"
+        )}
+      >
+        {text}
+      </p>
+    </div>
+  )
+}
 
 export function MetadataDisplay({
   stationName,
@@ -35,12 +82,8 @@ export function MetadataDisplay({
         )}
       </p>
 
-      {/* DLS - Now Playing Text (DAB+ only) */}
-      {dls && (
-        <p className="text-purple-400 text-sm line-clamp-2 max-w-md mx-auto">
-          {dls}
-        </p>
-      )}
+      {/* DLS - Now Playing Text (DAB+ only) - scrolling marquee */}
+      {dls && <ScrollingDLS text={dls} />}
 
       {/* DAB+ Technical Info */}
       {isDAB && (signal || audio || pty) && (

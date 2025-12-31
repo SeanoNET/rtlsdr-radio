@@ -14,6 +14,7 @@ export function LeftSidebar({
   onSelectStation,
   onPlayStation,
   onDeleteStation,
+  onModeChange,
   isPlaying,
   className,
 }) {
@@ -37,7 +38,7 @@ export function LeftSidebar({
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="dab" className="flex-1 flex flex-col">
+      <Tabs defaultValue="dab" onValueChange={onModeChange} className="flex-1 flex flex-col">
         <TabsList className="mx-4 mt-4 grid w-auto grid-cols-2">
           <TabsTrigger value="dab" className="gap-1.5">
             <Waves className="h-3.5 w-3.5" />

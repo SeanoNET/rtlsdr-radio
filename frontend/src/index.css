@@ -141,3 +141,61 @@
 .audio-bars .bar:nth-child(4) {
   animation: audio-bar-4 0.9s ease-in-out infinite;
 }
+
+/* DLS (Dynamic Label Segment) scrolling marquee animation */
+@keyframes dls-scroll {
+  0% {
+    transform: translateX(0%);
+  }
+  /* Pause at start */
+  10% {
+    transform: translateX(0%);
+  }
+  /* Scroll to end */
+  90% {
+    transform: translateX(calc(-100% + 100cqw));
+  }
+  /* Pause at end */
+  100% {
+    transform: translateX(calc(-100% + 100cqw));
+  }
+}
+
+.dls-container {
+  container-type: inline-size;
+  position: relative;
+}
+
+.dls-text {
+  animation: dls-scroll 12s ease-in-out infinite;
+  padding-right: 2rem; /* Extra space at end */
+}
+
+/* Only animate if text overflows - use container queries */
+@container (min-width: 0px) {
+  .dls-text {
+    /* Animation will naturally not scroll if text fits */
+  }
+}
+
+/* Fade edges for smooth scroll appearance */
+.dls-container::before,
+.dls-container::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2rem;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.dls-container::before {
+  left: 0;
+  background: linear-gradient(to right, hsl(var(--background)), transparent);
+}
+
+.dls-container::after {
+  right: 0;
+  background: linear-gradient(to left, hsl(var(--background)), transparent);
+}

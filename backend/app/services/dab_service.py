@@ -439,7 +439,14 @@ class DabService:
                     )
 
                 data = await response.json()
-                return self._parse_metadata(data)
+                metadata = self._parse_metadata(data)
+
+                # Fetch MOT slideshow image from separate endpoint
+                mot_image = await self._fetch_mot_image()
+                if mot_image:
+                    metadata.mot_image = mot_image
+
+                return metadata
 
         except asyncio.TimeoutError:
             logger.warning("Timeout getting metadata from welle-cli")
@@ -459,6 +466,50 @@ class DabService:
                 channel=self._channel,
                 is_playing=True,
             )
+
+    async def _fetch_mot_image(self) -> Optional[str]:
+        """
+        Fetch MOT slideshow image from welle-cli's /slide endpoint.
+
+        Returns:
+            Base64-encoded image string, or None if not available.
+        """
+        if not self._service_id:
+            return None
+
+        try:
+            # welle-cli serves slides at /slide/{hex_service_id}
+            slide_url = f"{self.welle_base_url}/slide/0x{self._service_id:04x}"
+            session = await self._get_http_session()
+
+            async with session.get(
+                slide_url,
+                timeout=aiohttp.ClientTimeout(total=3),
+            ) as response:
+                if response.status != 200:
+                    return None
+
+                # Check content type
+                content_type = response.headers.get("Content-Type", "")
+                if not content_type.startswith("image/"):
+                    return None
+
+                # Read and base64 encode the image
+                image_data = await response.read()
+                if not image_data or len(image_data) < 100:
+                    # Too small to be a valid image
+                    return None
+
+                import base64
+                encoded = base64.b64encode(image_data).decode("utf-8")
+                return f"data:{content_type};base64,{encoded}"
+
+        except asyncio.TimeoutError:
+            logger.debug("Timeout fetching MOT slide")
+            return None
+        except Exception as e:
+            logger.debug(f"Error fetching MOT slide: {e}")
+            return None
 
     def _parse_metadata(self, data: dict) -> DabMetadata:
         """Parse welle-cli mux.json response into DabMetadata."""
@@ -492,13 +543,19 @@ class DabService:
         else:
             program_name = label_data
 
-        # Parse DLS (Dynamic Label Segment) - welle-cli uses "dls_label" at service level
-        dls = current_service.get("dls_label")
+        # Parse DLS (Dynamic Label Segment) - welle-cli uses nested "dls" object
+        dls = None
+        dls_data = current_service.get("dls")
+        if isinstance(dls_data, dict):
+            dls = dls_data.get("label")
+        elif isinstance(dls_data, str):
+            dls = dls_data
 
-        # Also check nested "mot" structure for backwards compatibility
+        # Fallback to legacy field names
+        if not dls:
+            dls = current_service.get("dls_label")
+
         mot_data = current_service.get("mot", {})
-        if not dls and isinstance(mot_data, dict):
-            dls = mot_data.get("dls") or mot_data.get("dls_label")
 
         # MOT slideshow image - check multiple possible locations
         mot_image = None

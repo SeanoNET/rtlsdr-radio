@@ -29,6 +29,7 @@ import {
 export default function RadioApp() {
   // Core state
   const [selectedStation, setSelectedStation] = useState(null)
+  const [selectedMode, setSelectedMode] = useState("dab") // "dab" or "fm"
   const [frequency, setFrequency] = useState(101.1)
   const [volume, setVolume] = useState(0.5)
   const [error, setError] = useState(null)
@@ -93,16 +94,23 @@ export default function RadioApp() {
 
         const station = currentStation
 
-        // Tune based on station type
+        // Tune based on station type or selected mode
         if (station?.station_type === "dab") {
           await dabApi.tune(
             station.dab_channel,
             station.dab_program,
             station.dab_service_id
           )
-        } else {
-          const tuneFrequency = station?.frequency || parseFloat(frequency)
+        } else if (station) {
+          // FM station selected
+          const tuneFrequency = station.frequency || parseFloat(frequency)
           await tunerApi.tune(tuneFrequency, "wfm")
+        } else if (selectedMode === "fm") {
+          // No station selected, but FM mode - use manual frequency
+          await tunerApi.tune(parseFloat(frequency), "wfm")
+        } else {
+          // DAB mode with no station selected
+          throw new Error("Please select a DAB+ station to play")
         }
 
         // Wait for stream
@@ -126,6 +134,7 @@ export default function RadioApp() {
   }, [
     speakers.selectedSpeaker,
     currentStation,
+    selectedMode,
     frequency,
     volume,
     browserAudio,
@@ -339,6 +348,7 @@ export default function RadioApp() {
             onSelectStation={handleStationSelect}
             onPlayStation={handleStationPlay}
             onDeleteStation={handleDeleteStation}
+            onModeChange={setSelectedMode}
             isPlaying={isPlaying}
           />
         }
