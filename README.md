@@ -177,6 +177,8 @@ When `Icy-MetaData: 1` header is present:
 
 This enables "now playing" display in Music Assistant, VLC, and other ICY-compatible players.
 
+![DAB+ Now Playing in Music Assistant](docs/ma-dab-pad.png)
+
 ## Migration Notes
 
 ### LMS/Squeezebox Users
