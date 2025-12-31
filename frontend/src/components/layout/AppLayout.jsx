@@ -67,7 +67,7 @@ export function AppLayout({
 
         {/* Center panel - Now Playing */}
         <main className="flex-1 overflow-auto">
-          <div className="mx-auto max-w-2xl h-full flex flex-col">
+          <div className="mx-auto max-w-2xl h-full flex flex-col justify-center">
             {children}
           </div>
         </main>

@@ -15,6 +15,7 @@ export function AlbumArt({
     md: "w-24 h-24",
     lg: "w-48 h-48",
     xl: "w-64 h-64",
+    "2xl": "w-80 h-80",
   }
 
   // Priority: MOT slideshow > Station image > Placeholder
@@ -55,7 +56,8 @@ export function AlbumArt({
               size === "sm" && "w-6 h-6",
               size === "md" && "w-10 h-10",
               size === "lg" && "w-16 h-16",
-              size === "xl" && "w-20 h-20"
+              size === "xl" && "w-20 h-20",
+              size === "2xl" && "w-24 h-24"
             )}
           />
         </div>

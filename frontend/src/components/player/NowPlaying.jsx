@@ -48,7 +48,7 @@ export function NowPlaying({
         motImage={dabMetadata?.mot_image}
         motContentType={dabMetadata?.mot_content_type}
         stationName={stationName}
-        size="lg"
+        size="2xl"
       />
 
       {/* Metadata Display */}
