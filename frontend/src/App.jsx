@@ -689,8 +689,8 @@ export default function RadioApp() {
               >
                 <option value="">Select channel...</option>
                 {dabChannels.map((ch) => (
-                  <option key={ch.name} value={ch.name}>
-                    {ch.name} ({ch.frequency} MHz)
+                  <option key={ch.id} value={ch.id}>
+                    {ch.id}
                   </option>
                 ))}
               </select>
