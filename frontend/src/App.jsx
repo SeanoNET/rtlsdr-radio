@@ -5,6 +5,25 @@ const API_BASE = import.meta.env.VITE_API_URL || "/api";
 // Special ID for browser playback
 const BROWSER_SPEAKER_ID = "browser:local";
 
+// Helper to wait for stream to be ready with backoff
+async function waitForStreamReady(maxAttempts = 10, baseDelay = 200) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const res = await fetch(`${API_BASE}/stream/ready`);
+      const data = await res.json();
+      if (data.ready) {
+        return true;
+      }
+    } catch (err) {
+      console.debug("Stream ready check failed:", err);
+    }
+    // Exponential backoff
+    const delay = baseDelay * Math.pow(1.5, attempt);
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+  return false;
+}
+
 export default function RadioApp() {
   const [speakers, setSpeakers] = useState([]);
   const [stations, setStations] = useState([]);
@@ -139,6 +158,14 @@ export default function RadioApp() {
     try {
       // Browser playback - tune first, then play stream locally
       if (selectedSpeaker === BROWSER_SPEAKER_ID) {
+        // Stop existing audio before switching channels
+        if (audioElement) {
+          audioElement.pause();
+          audioElement.src = "";
+          setAudioElement(null);
+          setBrowserPlaying(false);
+        }
+
         const station = selectedStation
           ? stations.find((s) => s.id === selectedStation)
           : null;
@@ -185,9 +212,22 @@ export default function RadioApp() {
           }
         }
 
+        // Wait for stream to be ready before connecting
+        const streamReady = await waitForStreamReady();
+        if (!streamReady) {
+          throw new Error("Stream not ready. Please try again.");
+        }
+
         // Create audio element and play stream
         const audio = new Audio(`${API_BASE}/stream`);
         audio.volume = volume;
+
+        // Handle audio errors gracefully
+        audio.onerror = () => {
+          console.debug("Audio stream error - stream may have stopped");
+          setBrowserPlaying(false);
+        };
+
         audio.play();
         setAudioElement(audio);
         setBrowserPlaying(true);

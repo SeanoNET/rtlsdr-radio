@@ -22,7 +22,9 @@ class TunerService:
         self._gain: Optional[float] = None
         self._squelch: Optional[int] = None
         self._lock = asyncio.Lock()
+        self._read_lock = asyncio.Lock()  # Prevent concurrent stream reads
         self._audio_fifo_path = Path("/tmp/rtlsdr_audio.fifo")
+        self._stream_ready = False  # Track if stream is ready for consumption
     
     def _get_rtl_fm_args(
         self,
@@ -83,9 +85,14 @@ class TunerService:
     def is_running(self) -> bool:
         """Check if tuner is currently running."""
         return (
-            self._rtl_process is not None 
+            self._rtl_process is not None
             and self._rtl_process.poll() is None
         )
+
+    @property
+    def is_stream_ready(self) -> bool:
+        """Check if audio stream is ready for consumption."""
+        return self.is_running and self._stream_ready
     
     def get_status(self) -> TunerStatus:
         """Get current tuner status."""
@@ -108,6 +115,9 @@ class TunerService:
         Tune to a frequency. Restarts the rtl_fm process if already running.
         """
         async with self._lock:
+            # Mark stream as not ready during tuning
+            self._stream_ready = False
+
             # Stop existing processes
             await self._stop_processes()
             
@@ -153,7 +163,9 @@ class TunerService:
                     stderr = self._rtl_process.stderr.read().decode(errors='replace') if self._rtl_process.stderr else ""
                     logger.error(f"rtl_fm failed to start: {stderr}")
                     return False
-                
+
+                # Mark stream as ready
+                self._stream_ready = True
                 logger.info(f"Successfully tuned to {frequency} MHz")
                 return True
                 
@@ -167,6 +179,8 @@ class TunerService:
     
     async def _stop_processes(self):
         """Stop rtl_fm and ffmpeg processes."""
+        self._stream_ready = False
+
         for proc, name in [
             (self._ffmpeg_process, "ffmpeg"),
             (self._rtl_process, "rtl_fm"),
@@ -179,7 +193,7 @@ class TunerService:
                 except subprocess.TimeoutExpired:
                     proc.kill()
                     proc.wait()
-        
+
         self._rtl_process = None
         self._ffmpeg_process = None
     
@@ -202,17 +216,22 @@ class TunerService:
     
     async def read_audio_chunk(self, chunk_size: int = 4096) -> Optional[bytes]:
         """Read a chunk of audio data from the stream."""
-        if not self._ffmpeg_process or not self._ffmpeg_process.stdout:
+        if not self._stream_ready or not self._ffmpeg_process or not self._ffmpeg_process.stdout:
             return None
-        
-        loop = asyncio.get_event_loop()
-        try:
-            chunk = await loop.run_in_executor(
-                None,
-                self._ffmpeg_process.stdout.read,
-                chunk_size,
-            )
-            return chunk if chunk else None
-        except Exception as e:
-            logger.error(f"Error reading audio chunk: {e}")
-            return None
+
+        # Use read lock to prevent concurrent readers
+        async with self._read_lock:
+            if not self._ffmpeg_process or not self._ffmpeg_process.stdout:
+                return None
+
+            loop = asyncio.get_event_loop()
+            try:
+                chunk = await loop.run_in_executor(
+                    None,
+                    self._ffmpeg_process.stdout.read,
+                    chunk_size,
+                )
+                return chunk if chunk else None
+            except Exception as e:
+                logger.debug(f"Error reading audio chunk: {e}")
+                return None

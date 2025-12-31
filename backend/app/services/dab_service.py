@@ -26,8 +26,10 @@ class DabService:
         self._ensemble: Optional[str] = None
         self._welle_port = welle_port
         self._lock = asyncio.Lock()
+        self._read_lock = asyncio.Lock()  # Prevent concurrent stream reads
         self._http_session: Optional[aiohttp.ClientSession] = None
         self._audio_response: Optional[aiohttp.ClientResponse] = None
+        self._stream_ready = False  # Track if stream is ready for consumption
 
     @property
     def is_running(self) -> bool:
@@ -36,6 +38,11 @@ class DabService:
             self._welle_process is not None
             and self._welle_process.poll() is None
         )
+
+    @property
+    def is_stream_ready(self) -> bool:
+        """Check if audio stream is ready for consumption."""
+        return self.is_running and self._stream_ready and self._service_id is not None
 
     @property
     def welle_base_url(self) -> str:
@@ -97,6 +104,9 @@ class DabService:
             True if tuning successful, False otherwise.
         """
         async with self._lock:
+            # Mark stream as not ready during tuning
+            self._stream_ready = False
+
             # Validate channel
             freq = get_channel_frequency(channel)
             if freq is None:
@@ -146,6 +156,10 @@ class DabService:
                     if self._service_id is None:
                         logger.warning(f"Program '{program}' not found on channel {channel}")
                         # Don't fail - let the caller decide what to do
+
+                # Mark stream as ready if we have a service_id
+                if self._service_id is not None:
+                    self._stream_ready = True
 
                 logger.info(f"Successfully tuned to DAB+ channel {channel}")
                 return True
@@ -330,28 +344,35 @@ class DabService:
         Returns:
             Audio data bytes or None if not available.
         """
-        # Ensure we have a connection
-        if self._audio_response is None:
-            if not await self._connect_audio_stream():
-                return None
+        if not self._stream_ready:
+            return None
 
-        try:
-            chunk = await self._audio_response.content.read(chunk_size)
-            return chunk if chunk else None
-        except asyncio.TimeoutError:
-            logger.debug("Audio stream read timeout")
-            return None
-        except aiohttp.ClientError as e:
-            logger.debug(f"Audio stream error, reconnecting: {e}")
-            await self._disconnect_audio_stream()
-            return None
-        except Exception as e:
-            logger.error(f"Error reading audio chunk: {e}")
-            await self._disconnect_audio_stream()
-            return None
+        # Use read lock to prevent concurrent readers
+        async with self._read_lock:
+            # Ensure we have a connection
+            if self._audio_response is None:
+                if not await self._connect_audio_stream():
+                    return None
+
+            try:
+                chunk = await self._audio_response.content.read(chunk_size)
+                return chunk if chunk else None
+            except asyncio.TimeoutError:
+                logger.debug("Audio stream read timeout")
+                return None
+            except aiohttp.ClientError as e:
+                logger.debug(f"Audio stream error, reconnecting: {e}")
+                await self._disconnect_audio_stream()
+                return None
+            except Exception as e:
+                logger.debug(f"Error reading audio chunk: {e}")
+                await self._disconnect_audio_stream()
+                return None
 
     async def _stop_process(self):
         """Stop welle-cli process."""
+        self._stream_ready = False
+
         # Disconnect audio stream first
         await self._disconnect_audio_stream()
 
