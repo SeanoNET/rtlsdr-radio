@@ -27,6 +27,12 @@ export default function RadioApp() {
   const [newStationChannel, setNewStationChannel] = useState("");
   const [newStationProgram, setNewStationProgram] = useState("");
 
+  // DAB+ scan
+  const [dabChannels, setDabChannels] = useState([]);
+  const [selectedDabChannel, setSelectedDabChannel] = useState("");
+  const [dabPrograms, setDabPrograms] = useState([]);
+  const [scanning, setScanning] = useState(false);
+
   // Transfer playback dialog
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [pendingSpeakerChange, setPendingSpeakerChange] = useState(null);
@@ -61,14 +67,61 @@ export default function RadioApp() {
     }
   }, []);
 
+  const fetchDabChannels = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/dab/channels`);
+      const data = await res.json();
+      setDabChannels(data);
+    } catch (err) {
+      console.error("Failed to fetch DAB channels");
+    }
+  }, []);
+
+  const scanDabChannel = async (channel) => {
+    setScanning(true);
+    setDabPrograms([]);
+    try {
+      const res = await fetch(`${API_BASE}/dab/programs?channel=${channel}`);
+      const data = await res.json();
+      setDabPrograms(data);
+    } catch (err) {
+      setError("Failed to scan DAB+ channel");
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const addDabProgram = async (program) => {
+    try {
+      const body = {
+        name: program.name.trim(),
+        station_type: "dab",
+        dab_channel: program.channel,
+        dab_program: program.name.trim(),
+        dab_service_id: program.service_id,
+      };
+      const res = await fetch(`${API_BASE}/stations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        await fetchStations();
+      }
+    } catch (err) {
+      setError("Failed to add station");
+    }
+  };
+
   useEffect(() => {
     fetchSpeakers();
     fetchStations();
     fetchPlaybackStatus();
+    fetchDabChannels();
 
     const interval = setInterval(fetchPlaybackStatus, 2000);
     return () => clearInterval(interval);
-  }, [fetchSpeakers, fetchStations, fetchPlaybackStatus]);
+  }, [fetchSpeakers, fetchStations, fetchPlaybackStatus, fetchDabChannels]);
 
   // Computed playback state - defined early so handlers can use them
   const isPlaying = playbackStatus?.state === "playing" || browserPlaying;
@@ -623,6 +676,58 @@ export default function RadioApp() {
                 </button>
               </div>
             ))}
+          </div>
+
+          {/* DAB+ Scan */}
+          <div className="border-t border-white/10 pt-4 mt-4">
+            <p className="text-sm text-slate-400 mb-2">Scan DAB+ channels:</p>
+            <div className="flex gap-2 mb-3">
+              <select
+                value={selectedDabChannel}
+                onChange={(e) => setSelectedDabChannel(e.target.value)}
+                className="flex-1 bg-white/10 rounded-lg px-3 py-2 border border-white/10 focus:border-purple-500 focus:outline-none"
+              >
+                <option value="">Select channel...</option>
+                {dabChannels.map((ch) => (
+                  <option key={ch.name} value={ch.name}>
+                    {ch.name} ({ch.frequency} MHz)
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => selectedDabChannel && scanDabChannel(selectedDabChannel)}
+                disabled={!selectedDabChannel || scanning}
+                className="bg-purple-600 hover:bg-purple-500 disabled:opacity-50 rounded-lg px-4 py-2 font-medium"
+              >
+                {scanning ? "Scanning..." : "Scan"}
+              </button>
+            </div>
+            {dabPrograms.length > 0 && (
+              <div className="bg-white/5 rounded-lg p-3 space-y-2">
+                <p className="text-xs text-slate-400 uppercase tracking-wide">
+                  Found {dabPrograms.length} programs on {selectedDabChannel}:
+                </p>
+                {dabPrograms.map((prog) => (
+                  <div
+                    key={prog.service_id}
+                    className="flex items-center justify-between p-2 bg-white/5 rounded"
+                  >
+                    <div>
+                      <p className="font-medium">{prog.name}</p>
+                      <p className="text-xs text-slate-400">
+                        ID: {prog.service_id} {prog.bitrate ? `• ${prog.bitrate}kbps` : ""}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => addDabProgram(prog)}
+                      className="text-purple-400 hover:text-purple-300 px-3 py-1 text-sm bg-purple-500/20 rounded"
+                    >
+                      + Add
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Manual Frequency */}

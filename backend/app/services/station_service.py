@@ -49,8 +49,10 @@ class StationService:
                         f"DEFAULT_STATIONS changed from '{saved_mode}' to '{current_mode}', "
                         "regenerating default stations"
                     )
+                    self._stations.clear()  # Clear old stations
                     self._default_mode = current_mode
                     self._create_defaults()
+                    self._save()  # Save the new state
                     return
 
                 # Load stations normally
