@@ -8,8 +8,8 @@ services:
     devices:
       - /dev/bus/usb:/dev/bus/usb
     volumes:
-      - rtlsdr-data:/app/data
-      - rtlsdr-logos:/app/app/static/images/stations
+      - /mnt/user/appdata/rtlsdr-radio/data:/app/data
+      - /mnt/user/appdata/rtlsdr-radio/logos:/app/app/static/images/stations
     environment:
       - EXTERNAL_STREAM_URL=${EXTERNAL_STREAM_URL:-}
       - DEFAULT_STATIONS=${DEFAULT_STATIONS:-all}  # Options: fm, dab, all, none
@@ -78,7 +78,7 @@ services:
     security_opt:
       - apparmor:unconfined
     volumes:
-      - music-assistant-data:/data
+      - /mnt/user/appdata/rtlsdr-radio/music-assistant:/data
     environment:
       - LOG_LEVEL=info
     labels:
@@ -93,7 +93,3 @@ services:
 networks:
   proxy:
     external: true
-volumes:
-  rtlsdr-data:
-  rtlsdr-logos:
-  music-assistant-data:
