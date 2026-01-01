@@ -137,8 +137,8 @@ class DabService:
 
                 self._welle_process = subprocess.Popen(
                     args,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
                 )
 
                 # Give welle-cli time to start, find sync, and scan the ensemble
@@ -146,7 +146,10 @@ class DabService:
 
                 # Check if process is still running
                 if self._welle_process.poll() is not None:
-                    logger.error("welle-cli failed to start (process exited)")
+                    # Capture stderr to see why it failed
+                    _, stderr = self._welle_process.communicate()
+                    error_msg = stderr.decode() if stderr else "unknown error"
+                    logger.error(f"welle-cli failed to start: {error_msg}")
                     return False
 
                 # If no service_id provided, try to find it from program name
