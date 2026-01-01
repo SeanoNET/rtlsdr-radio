@@ -59,6 +59,11 @@ services:
       - "traefik.http.routers.rtlsdr.tls=true"
       - "traefik.http.routers.rtlsdr.service=rtlsdr"
       - "traefik.http.services.rtlsdr.loadbalancer.server.port=80"
+      - "godash.enable=true"
+      - "godash.name=RTL-SDR Radio"
+      - "godash.group=Media"
+      - "godash.icon=radio"
+      - "godash.description=FM Radio Receiver"
 
   music-assistant:
     image: ghcr.io/seanonet/rtlsdr-music-assistant:latest
@@ -76,6 +81,14 @@ services:
       - music-assistant-data:/data
     environment:
       - LOG_LEVEL=info
+    labels:
+      # GoDash (explicit URL since host networking)
+      - "godash.enable=true"
+      - "godash.name=Music Assistant"
+      - "godash.group=Media"
+      - "godash.icon=music-assistant"
+      - "godash.description=Whole Home Audio"
+      - "godash.url=http://10.0.0.200:8095"
 
 networks:
   proxy:
