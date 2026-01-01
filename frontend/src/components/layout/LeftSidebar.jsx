@@ -162,10 +162,10 @@ function StationCard({ station, isSelected, isCurrentlyPlaying, onSelect, onPlay
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center flex-shrink-0">
         {/* Audio bars animation when playing, play button otherwise */}
         {isCurrentlyPlaying ? (
-          <div className="audio-bars mx-2">
+          <div className="audio-bars mx-1">
             <div className="bar" />
             <div className="bar" />
             <div className="bar" />
@@ -180,11 +180,11 @@ function StationCard({ station, isSelected, isCurrentlyPlaying, onSelect, onPlay
               onPlay?.()
             }}
             className={cn(
-              "transition-opacity text-muted-foreground hover:text-primary",
+              "transition-opacity text-muted-foreground hover:text-primary h-7 w-7",
               isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
             )}
           >
-            <Play className="h-4 w-4" />
+            <Play className="h-3.5 w-3.5" />
           </Button>
         )}
 
@@ -196,9 +196,9 @@ function StationCard({ station, isSelected, isCurrentlyPlaying, onSelect, onPlay
             e.stopPropagation()
             onEdit?.()
           }}
-          className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+          className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground h-7 w-7"
         >
-          <Pencil className="h-4 w-4" />
+          <Pencil className="h-3.5 w-3.5" />
         </Button>
 
         {/* Delete button */}
@@ -209,9 +209,9 @@ function StationCard({ station, isSelected, isCurrentlyPlaying, onSelect, onPlay
             e.stopPropagation()
             onDelete()
           }}
-          className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+          className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive h-7 w-7"
         >
-          <Trash2 className="h-4 w-4" />
+          <Trash2 className="h-3.5 w-3.5" />
         </Button>
       </div>
     </div>

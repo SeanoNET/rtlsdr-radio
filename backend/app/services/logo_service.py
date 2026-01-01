@@ -6,11 +6,15 @@ import hashlib
 import logging
 import os
 import re
+import time
 from pathlib import Path
 from typing import List, Optional
 from urllib.parse import urlparse
 
 import aiohttp
+
+# How long to wait before retrying a failed logo fetch (24 hours)
+FAILED_RETRY_SECONDS = 24 * 60 * 60
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +111,53 @@ class LogoService:
         name_hash = hashlib.md5(station_name.lower().encode()).hexdigest()[:12]
         return f"logo_{name_hash}"
 
+    def _get_failed_marker_path(self, station_name: str) -> Path:
+        """Get the path to the failed marker file for a station."""
+        base_filename = self._get_logo_filename(station_name)
+        return self._storage_path / f"{base_filename}.failed"
+
+    def _is_fetch_failed(self, station_name: str) -> bool:
+        """Check if logo fetch previously failed and shouldn't be retried yet."""
+        failed_path = self._get_failed_marker_path(station_name)
+        if not failed_path.exists():
+            return False
+
+        # Check if enough time has passed to retry
+        try:
+            mtime = failed_path.stat().st_mtime
+            age = time.time() - mtime
+            if age < FAILED_RETRY_SECONDS:
+                logger.debug(
+                    "Skipping logo fetch for %s (failed %d min ago, retry in %d min)",
+                    station_name,
+                    int(age / 60),
+                    int((FAILED_RETRY_SECONDS - age) / 60),
+                )
+                return True
+            # Enough time has passed, remove the marker and allow retry
+            failed_path.unlink()
+        except OSError:
+            pass
+        return False
+
+    def _mark_fetch_failed(self, station_name: str) -> None:
+        """Mark a station's logo fetch as failed to prevent repeated attempts."""
+        failed_path = self._get_failed_marker_path(station_name)
+        try:
+            failed_path.touch()
+            logger.info("Marked logo fetch as failed for %s (will retry in 24h)", station_name)
+        except OSError as e:
+            logger.warning("Could not create failed marker: %s", e)
+
+    def _clear_failed_marker(self, station_name: str) -> None:
+        """Clear the failed marker for a station (used on force refresh)."""
+        failed_path = self._get_failed_marker_path(station_name)
+        if failed_path.exists():
+            try:
+                failed_path.unlink()
+            except OSError:
+                pass
+
     def _get_cached_logo_path(self, station_name: str) -> Optional[Path]:
         """Check if a logo already exists for this station name."""
         base_filename = self._get_logo_filename(station_name)
@@ -137,6 +188,10 @@ class LogoService:
         Returns:
             Relative URL to the cached logo, or None if not found
         """
+        # On force refresh, clear any failed marker
+        if force_refresh:
+            self._clear_failed_marker(station_name)
+
         # Check cache first (unless force refresh)
         if not force_refresh:
             cached_url = self.get_cached_logo_url(station_name)
@@ -144,10 +199,15 @@ class LogoService:
                 logger.debug("Using cached logo for %s: %s", station_name, cached_url)
                 return cached_url
 
+            # Check if previously failed - skip if so
+            if self._is_fetch_failed(station_name):
+                return None
+
         # Search RadioBrowser API
         favicon_url = await self._search_radio_browser(station_name)
         if not favicon_url:
             logger.debug("No logo found for station: %s", station_name)
+            self._mark_fetch_failed(station_name)
             return None
 
         # Download and cache the logo
@@ -155,6 +215,8 @@ class LogoService:
         if local_path:
             return f"/static/images/stations/{local_path.name}"
 
+        # Download failed - mark as failed
+        self._mark_fetch_failed(station_name)
         return None
 
     async def _search_radio_browser(self, station_name: str) -> Optional[str]:
