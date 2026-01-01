@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 class DabService:
     """Service for managing DAB+ radio via welle-cli."""
 
-    def __init__(self, welle_port: int = 8088):
+    def __init__(self, welle_port: int = 8188):
         self._welle_process: Optional[subprocess.Popen] = None
         self._channel: Optional[str] = None
         self._program: Optional[str] = None

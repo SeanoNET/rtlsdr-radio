@@ -45,7 +45,7 @@ COPY app/ ./app/
 ENV PYTHONUNBUFFERED=1
 
 # Expose API port, FM stream port, and DAB+ welle-cli port
-EXPOSE 9080 8088 8089
+EXPOSE 9080 8188 8089
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

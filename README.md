@@ -69,18 +69,8 @@ docker-compose up -d
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `EXTERNAL_STREAM_URL` | _(none)_ | HTTPS URL for Chromecast streaming (required for Chromecast) |
-| `DEFAULT_STATIONS` | `all` | Station presets mode (see below) |
 
-### DEFAULT_STATIONS Modes
-
-| Mode | Description |
-|------|-------------|
-| `all` | FM defaults + DAB+ discovery enabled (default) |
-| `fm` | FM stations only |
-| `dab` | DAB+ only - use channel scan to discover stations |
-| `none` | No default stations - start empty |
-
-The default FM stations are example presets for Perth, WA. You can delete these and add your own local stations.
+On first run, example FM stations (Perth, WA) are created. You can delete these and add your own local stations.
 
 ## Music Assistant Setup
 

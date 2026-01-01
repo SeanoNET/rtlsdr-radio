@@ -12,7 +12,6 @@ services:
       - /mnt/user/appdata/rtlsdr-radio/logos:/app/app/static/images/stations
     environment:
       - EXTERNAL_STREAM_URL=${EXTERNAL_STREAM_URL:-}
-      - DEFAULT_STATIONS=${DEFAULT_STATIONS:-all}  # Options: fm, dab, all, none
     # Note: ports not needed with network_mode: host (uses host ports directly)
     labels:
       # Enable Traefik (file-based config needed for host network services)

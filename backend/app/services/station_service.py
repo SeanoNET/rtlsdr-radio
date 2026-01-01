@@ -4,7 +4,6 @@ Station storage service - manages station presets.
 
 import json
 import logging
-import os
 import uuid
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -18,45 +17,22 @@ class StationService:
     def __init__(self, storage_path: str = "data/stations.json"):
         self._storage_path = Path(storage_path)
         self._stations: Dict[str, Station] = {}
-        self._default_mode: str = "all"
         self._load()
 
-    def _get_current_mode(self) -> str:
-        """Get the current DEFAULT_STATIONS mode from env."""
-        return os.environ.get("DEFAULT_STATIONS", "all").lower().strip()
-
     def _load(self):
-        """Load stations from storage file, regenerating if mode changed."""
-        current_mode = self._get_current_mode()
-
+        """Load stations from storage file."""
         if self._storage_path.exists():
             try:
                 with open(self._storage_path, "r") as f:
                     data = json.load(f)
 
-                # Handle new format with mode tracking
+                # Handle format with mode tracking (legacy) or just stations
                 if isinstance(data, dict) and "stations" in data:
-                    saved_mode = data.get("default_mode", "all")
                     stations_data = data.get("stations", [])
                 else:
                     # Legacy format: just an array of stations
-                    saved_mode = None
                     stations_data = data
 
-                # Check if mode changed - regenerate defaults
-                if saved_mode != current_mode:
-                    logger.info(
-                        f"DEFAULT_STATIONS changed from '{saved_mode}' to '{current_mode}', "
-                        "regenerating default stations"
-                    )
-                    self._stations.clear()  # Clear old stations
-                    self._default_mode = current_mode
-                    self._create_defaults()
-                    self._save()  # Save the new state
-                    return
-
-                # Load stations normally
-                self._default_mode = saved_mode or current_mode
                 for item in stations_data:
                     station = Station(**item)
                     self._stations[station.id] = station
@@ -64,42 +40,23 @@ class StationService:
 
             except Exception as e:
                 logger.error(f"Failed to load stations: {e}")
-                self._default_mode = current_mode
                 self._create_defaults()
         else:
             # No file exists, create defaults
-            self._default_mode = current_mode
             self._create_defaults()
 
     def _save(self):
-        """Save stations to storage file with mode tracking."""
+        """Save stations to storage file."""
         self._storage_path.parent.mkdir(parents=True, exist_ok=True)
         try:
             with open(self._storage_path, "w") as f:
-                data = {
-                    "default_mode": self._default_mode,
-                    "stations": [s.model_dump() for s in self._stations.values()]
-                }
-                json.dump(data, f, indent=2)
+                stations = [s.model_dump() for s in self._stations.values()]
+                json.dump(stations, f, indent=2)
         except Exception as e:
             logger.error(f"Failed to save stations: {e}")
 
     def _create_defaults(self):
-        """Create default station presets based on DEFAULT_STATIONS env var.
-
-        Env var options:
-            - "dab" or "dab+" : DAB+ only mode, no hardcoded defaults (use scan to discover)
-            - "fm" : Only FM stations (for FM antenna setups)
-            - "all" or "both" : FM defaults + DAB+ discovery mode (default)
-            - "none" : No default stations
-        """
-        mode = self._default_mode
-
-        if mode == "none":
-            logger.info("DEFAULT_STATIONS=none, skipping default station creation")
-            return
-
-        # FM defaults: (name, frequency, modulation, image_filename)
+        """Create default FM station presets (Perth, WA examples)."""
         fm_defaults = [
             ("Nova 93.7", 93.7, Modulation.WFM, "nova.webp"),
             ("Mix 94.5", 94.5, Modulation.WFM, "945.jpg"),
@@ -108,39 +65,23 @@ class StationService:
             ("Triple J", 99.3, Modulation.WFM, "triplej.png"),
         ]
 
-        created = []
-
-        # Create FM defaults
-        if mode in ("fm", "all", "both"):
-            for name, freq, mod, image in fm_defaults:
-                image_url = f"/static/images/stations/{image}" if image else None
-                self.create(
-                    StationCreate(
-                        name=name,
-                        station_type=StationType.FM,
-                        frequency=freq,
-                        modulation=mod,
-                        image_url=image_url,
-                    )
+        for name, freq, mod, image in fm_defaults:
+            image_url = f"/static/images/stations/{image}" if image else None
+            self.create(
+                StationCreate(
+                    name=name,
+                    station_type=StationType.FM,
+                    frequency=freq,
+                    modulation=mod,
+                    image_url=image_url,
                 )
-            created.append("FM")
+            )
 
-        # DAB+ mode: No hardcoded defaults - programs are discovered dynamically via channel scan
-        # Users add stations from the programs found on their local DAB+ multiplex
-        if mode in ("dab", "dab+"):
-            logger.info("DAB+ mode: Use channel scan to discover available programs")
-
-        if created:
-            logger.info(f"Created default {' and '.join(created)} station presets (Perth, WA)")
+        logger.info("Created default FM station presets (Perth, WA)")
 
     def get_all(self) -> List[Station]:
-        """Get all stations, filtered by current mode."""
-        mode = self._get_current_mode()
-        if mode in ("dab", "dab+"):
-            return [s for s in self._stations.values() if s.station_type == StationType.DAB]
-        elif mode == "fm":
-            return [s for s in self._stations.values() if s.station_type == StationType.FM]
-        return list(self._stations.values())  # "all" or "both"
+        """Get all stations."""
+        return list(self._stations.values())
 
     def get(self, station_id: str) -> Optional[Station]:
         """Get a station by ID."""

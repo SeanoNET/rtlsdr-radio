@@ -10,7 +10,6 @@ services:
       - ./backend/data:/app/data
     environment:
       - EXTERNAL_STREAM_URL=${EXTERNAL_STREAM_URL:-}
-      - DEFAULT_STATIONS=${DEFAULT_STATIONS:-all}  # Options: fm, dab, all, none
     ports:
       - "9080:9080"
       - "8089:8089"
