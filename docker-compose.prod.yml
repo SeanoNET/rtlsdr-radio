@@ -78,6 +78,8 @@ services:
       - apparmor:unconfined
     volumes:
       - /mnt/user/appdata/rtlsdr-radio/music-assistant:/data
+      # Mount fixed provider code (hotfix until image is rebuilt)
+      - /mnt/user/appdata/rtlsdr-radio/provider/__init__.py:/app/venv/lib/python3.13/site-packages/music_assistant/providers/rtlsdr_radio/__init__.py:ro
     environment:
       - LOG_LEVEL=info
     labels:

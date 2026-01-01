@@ -78,7 +78,7 @@ On first run, example FM stations (Perth, WA) are created. You can delete these 
 2. Go to **Settings → Providers → Add Provider**
 3. Select **RTL-SDR Radio**
 4. Configure:
-   - **Host**: `rtlsdr-backend` (or your backend IP)
+   - **Host**: `localhost` (default - works when backend uses host network)
    - **Port**: `9080`
 5. Click **Save**
 

@@ -58,8 +58,8 @@ async def get_config_entries(
             key="host",
             type=ConfigEntryType.STRING,
             label="RTL-SDR Radio Host",
-            default_value="rtlsdr-backend",
-            description="Hostname or IP of the RTL-SDR Radio backend",
+            default_value="localhost",
+            description="Hostname or IP of the RTL-SDR Radio backend (use 'localhost' when backend runs on host network)",
             required=True,
         ),
         ConfigEntry(
@@ -301,7 +301,7 @@ class RTLSDRRadioProvider(MusicProvider):
                     MediaItemImage(
                         type=ImageType.THUMB,
                         path=image_url,
-                        provider=self.lookup_key,
+                        provider=self.instance_id,
                         remotely_accessible=True,
                     )
                 ]
