@@ -71,6 +71,39 @@ export function useStations() {
     [fetchStations]
   )
 
+  // Update station
+  const updateStation = useCallback(
+    async (stationId, updates) => {
+      setLoading(true)
+      try {
+        await stationsApi.update(stationId, updates)
+        await fetchStations()
+        return true
+      } catch (err) {
+        setError("Failed to update station")
+        return false
+      } finally {
+        setLoading(false)
+      }
+    },
+    [fetchStations]
+  )
+
+  // Refresh station logo
+  const refreshLogo = useCallback(
+    async (stationId) => {
+      try {
+        const updatedStation = await stationsApi.refreshLogo(stationId)
+        await fetchStations()
+        return updatedStation
+      } catch (err) {
+        setError("Failed to refresh logo")
+        return null
+      }
+    },
+    [fetchStations]
+  )
+
   // Scan DAB+ channel
   const scanDabChannel = useCallback(async (channel) => {
     setScanning(true)
@@ -119,7 +152,9 @@ export function useStations() {
     error,
     fetchStations,
     addStation,
+    updateStation,
     deleteStation,
+    refreshLogo,
     clearError,
     // DAB+ scan
     dabChannels,

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { AppLayout, LeftSidebar, RightSidebar, BottomBar } from "@/components/layout"
 import { NowPlaying } from "@/components/player"
+import { EditStationDialog } from "@/components/station/EditStationDialog"
 import {
   Dialog,
   DialogContent,
@@ -37,6 +38,9 @@ export default function RadioApp() {
 
   // New station form state
   const [newStation, setNewStation] = useState({ type: "fm" })
+
+  // Edit station dialog state
+  const [editingStation, setEditingStation] = useState(null)
 
   // Browser audio
   const browserAudio = useBrowserAudio()
@@ -222,6 +226,27 @@ export default function RadioApp() {
     [stationsHook, selectedStation]
   )
 
+  // Edit station
+  const handleEditStation = useCallback((station) => {
+    setEditingStation(station)
+  }, [])
+
+  // Save station edits
+  const handleSaveStation = useCallback(
+    async (stationId, updates) => {
+      await stationsHook.updateStation(stationId, updates)
+    },
+    [stationsHook]
+  )
+
+  // Refresh station logo
+  const handleRefreshLogo = useCallback(
+    async (stationId) => {
+      return await stationsHook.refreshLogo(stationId)
+    },
+    [stationsHook]
+  )
+
   // Add new station
   const handleAddStation = useCallback(async () => {
     if (!newStation.name) return
@@ -350,6 +375,7 @@ export default function RadioApp() {
             onSelectStation={handleStationSelect}
             onPlayStation={handleStationPlay}
             onDeleteStation={handleDeleteStation}
+            onEditStation={handleEditStation}
             onModeChange={setSelectedMode}
             isPlaying={isPlaying}
           />
@@ -432,6 +458,15 @@ export default function RadioApp() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Station Dialog */}
+      <EditStationDialog
+        station={editingStation}
+        open={!!editingStation}
+        onOpenChange={(open) => !open && setEditingStation(null)}
+        onSave={handleSaveStation}
+        onRefreshLogo={handleRefreshLogo}
+      />
     </>
   )
 }

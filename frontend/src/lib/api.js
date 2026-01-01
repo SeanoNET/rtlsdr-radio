@@ -83,6 +83,10 @@ export const stationsApi = {
     apiFetch(`/stations/${id}`, {
       method: "DELETE",
     }),
+  refreshLogo: (id) =>
+    apiFetch(`/stations/${id}/refresh-logo`, {
+      method: "POST",
+    }),
 }
 
 // Playback API

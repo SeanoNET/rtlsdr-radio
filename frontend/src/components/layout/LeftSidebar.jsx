@@ -4,7 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { getImageUrl } from "@/lib/api"
-import { Radio, Waves, Trash2, Play } from "lucide-react"
+import { Radio, Waves, Trash2, Play, Pencil } from "lucide-react"
 
 export function LeftSidebar({
   stations = [],
@@ -14,6 +14,7 @@ export function LeftSidebar({
   onSelectStation,
   onPlayStation,
   onDeleteStation,
+  onEditStation,
   onModeChange,
   isPlaying,
   className,
@@ -75,6 +76,7 @@ export function LeftSidebar({
                     isCurrentlyPlaying={isPlaying && selectedStation === station.id}
                     onSelect={() => onSelectStation(station.id)}
                     onPlay={() => onPlayStation?.(station.id)}
+                    onEdit={() => onEditStation?.(station)}
                     onDelete={() => onDeleteStation(station.id)}
                   />
                 ))
@@ -98,6 +100,7 @@ export function LeftSidebar({
                     isCurrentlyPlaying={isPlaying && selectedStation === station.id}
                     onSelect={() => onSelectStation(station.id)}
                     onPlay={() => onPlayStation?.(station.id)}
+                    onEdit={() => onEditStation?.(station)}
                     onDelete={() => onDeleteStation(station.id)}
                   />
                 ))
@@ -110,7 +113,7 @@ export function LeftSidebar({
   )
 }
 
-function StationCard({ station, isSelected, isCurrentlyPlaying, onSelect, onPlay, onDelete }) {
+function StationCard({ station, isSelected, isCurrentlyPlaying, onSelect, onPlay, onEdit, onDelete }) {
   const imageUrl = station.image_url ? getImageUrl(station.image_url) : null
 
   return (
@@ -184,6 +187,19 @@ function StationCard({ station, isSelected, isCurrentlyPlaying, onSelect, onPlay
             <Play className="h-4 w-4" />
           </Button>
         )}
+
+        {/* Edit button */}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={(e) => {
+            e.stopPropagation()
+            onEdit?.()
+          }}
+          className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
 
         {/* Delete button */}
         <Button
