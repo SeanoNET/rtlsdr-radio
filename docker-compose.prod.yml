@@ -4,6 +4,7 @@ services:
     container_name: rtlsdr-backend
     restart: unless-stopped
     privileged: true
+    network_mode: host  # Required for Chromecast mDNS discovery
     devices:
       - /dev/bus/usb:/dev/bus/usb
     volumes:
@@ -12,15 +13,10 @@ services:
     environment:
       - EXTERNAL_STREAM_URL=${EXTERNAL_STREAM_URL:-}
       - DEFAULT_STATIONS=${DEFAULT_STATIONS:-all}  # Options: fm, dab, all, none
-    ports:
-      - "127.0.0.1:18000:8000" # Local only for Music Assistant
-      - "127.0.0.1:18089:8089" # Stream port for local access
-    networks:
-      - proxy
+    # Note: ports not needed with network_mode: host (uses host ports directly)
     labels:
-      # Enable Traefik
+      # Enable Traefik (file-based config needed for host network services)
       - "traefik.enable=true"
-      - "traefik.docker.network=proxy"
 
       # API Router
       - "traefik.http.routers.rtlsdr-api.rule=Host(`radio.local.seanonet.dev`) && PathPrefix(`/api`)"
@@ -28,6 +24,7 @@ services:
       - "traefik.http.routers.rtlsdr-api.tls=true"
       - "traefik.http.routers.rtlsdr-api.service=rtlsdr-api"
       - "traefik.http.services.rtlsdr-api.loadbalancer.server.port=8000"
+      - "traefik.http.services.rtlsdr-api.loadbalancer.server.url=http://host.docker.internal:8000"
 
       # Static Files Router (station logos)
       - "traefik.http.routers.rtlsdr-static.rule=Host(`radio.local.seanonet.dev`) && PathPrefix(`/static`)"
@@ -41,6 +38,7 @@ services:
       - "traefik.http.routers.rtlsdr-stream.tls=true"
       - "traefik.http.routers.rtlsdr-stream.service=rtlsdr-stream"
       - "traefik.http.services.rtlsdr-stream.loadbalancer.server.port=8089"
+      - "traefik.http.services.rtlsdr-stream.loadbalancer.server.url=http://host.docker.internal:8089"
 
   frontend:
     image: ghcr.io/seanonet/rtlsdr-radio-frontend:latest
