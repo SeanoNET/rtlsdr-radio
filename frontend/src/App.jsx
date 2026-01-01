@@ -76,8 +76,8 @@ export default function RadioApp() {
   // DAB+ metadata (only fetch when playing DAB+)
   const dabMetadata = useDABMetadata(isDABPlaying)
 
-  // Combined play handler
-  const handlePlay = useCallback(async () => {
+  // Combined play handler - accepts optional station to avoid stale closure issues
+  const handlePlay = useCallback(async (stationOverride = null) => {
     if (!speakers.selectedSpeaker) {
       setError("Please select a speaker")
       return
@@ -92,7 +92,8 @@ export default function RadioApp() {
         // Stop existing audio
         browserAudio.stop()
 
-        const station = currentStation
+        // Use override station if provided, otherwise use currentStation
+        const station = stationOverride || currentStation
 
         // Tune based on station type or selected mode
         if (station?.station_type === "dab") {
@@ -201,12 +202,13 @@ export default function RadioApp() {
   const handleStationPlay = useCallback(
     (stationId) => {
       handleStationSelect(stationId)
-      // Small delay to let state update
-      setTimeout(() => {
-        handlePlay()
-      }, 50)
+      // Find the station and pass it directly to avoid stale closure issues
+      const station = stationsHook.stations.find((s) => s.id === stationId)
+      if (station) {
+        handlePlay(station)
+      }
     },
-    [handleStationSelect, handlePlay]
+    [handleStationSelect, handlePlay, stationsHook.stations]
   )
 
   // Delete station

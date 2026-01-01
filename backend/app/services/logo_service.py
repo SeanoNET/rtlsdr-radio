@@ -91,8 +91,8 @@ RADIO_BROWSER_SERVERS = [
     "https://fi1.api.radio-browser.info",
 ]
 
-# Image storage path
-LOGO_STORAGE_PATH = Path("static/images/stations")
+# Image storage path - must match the static files mount in main.py
+LOGO_STORAGE_PATH = Path(__file__).parent.parent / "static" / "images" / "stations"
 
 
 class LogoService:
