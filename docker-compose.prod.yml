@@ -28,6 +28,12 @@ services:
       - "traefik.http.routers.rtlsdr-api.service=rtlsdr-api"
       - "traefik.http.services.rtlsdr-api.loadbalancer.server.port=8000"
 
+      # Static Files Router (station logos)
+      - "traefik.http.routers.rtlsdr-static.rule=Host(`radio.local.seanonet.dev`) && PathPrefix(`/static`)"
+      - "traefik.http.routers.rtlsdr-static.entrypoints=https"
+      - "traefik.http.routers.rtlsdr-static.tls=true"
+      - "traefik.http.routers.rtlsdr-static.service=rtlsdr-api"
+
       # Stream Router (for Chromecast)
       - "traefik.http.routers.rtlsdr-stream.rule=Host(`radio-stream.local.seanonet.dev`)"
       - "traefik.http.routers.rtlsdr-stream.entrypoints=https"
