@@ -8,6 +8,7 @@ services:
       - /dev/bus/usb:/dev/bus/usb
     volumes:
       - rtlsdr-data:/app/data
+      - rtlsdr-logos:/app/app/static/images/stations
     environment:
       - EXTERNAL_STREAM_URL=${EXTERNAL_STREAM_URL:-}
       - DEFAULT_STATIONS=${DEFAULT_STATIONS:-all}  # Options: fm, dab, all, none
@@ -83,4 +84,5 @@ networks:
     external: true
 volumes:
   rtlsdr-data:
+  rtlsdr-logos:
   music-assistant-data:
