@@ -214,10 +214,10 @@ class LogoService:
                     break  # Try next server instead of returning
 
                 except aiohttp.ClientError as e:
-                    logger.warning("RadioBrowser server %s failed: %s", server, e)
+                    logger.warning("RadioBrowser server %s failed: %s: %s", server, type(e).__name__, e)
                     continue
                 except Exception as e:
-                    logger.error("Error searching RadioBrowser: %s", e)
+                    logger.error("Error searching RadioBrowser: %s: %s", type(e).__name__, e)
                     continue
 
         return None
