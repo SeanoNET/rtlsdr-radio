@@ -23,8 +23,7 @@ services:
       - "traefik.http.routers.rtlsdr-api.entrypoints=https"
       - "traefik.http.routers.rtlsdr-api.tls=true"
       - "traefik.http.routers.rtlsdr-api.service=rtlsdr-api"
-      - "traefik.http.services.rtlsdr-api.loadbalancer.server.port=8000"
-      - "traefik.http.services.rtlsdr-api.loadbalancer.server.url=http://host.docker.internal:8000"
+      - "traefik.http.services.rtlsdr-api.loadbalancer.server.url=http://host.docker.internal:9080"
 
       # Static Files Router (station logos)
       - "traefik.http.routers.rtlsdr-static.rule=Host(`radio.local.seanonet.dev`) && PathPrefix(`/static`)"
@@ -37,7 +36,6 @@ services:
       - "traefik.http.routers.rtlsdr-stream.entrypoints=https"
       - "traefik.http.routers.rtlsdr-stream.tls=true"
       - "traefik.http.routers.rtlsdr-stream.service=rtlsdr-stream"
-      - "traefik.http.services.rtlsdr-stream.loadbalancer.server.port=8089"
       - "traefik.http.services.rtlsdr-stream.loadbalancer.server.url=http://host.docker.internal:8089"
 
   frontend:
@@ -48,6 +46,8 @@ services:
       - backend
     networks:
       - proxy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     labels:
       # Enable Traefik
       - "traefik.enable=true"

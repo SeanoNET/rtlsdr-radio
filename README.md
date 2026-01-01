@@ -59,7 +59,7 @@ docker-compose up -d
 | Service | Port | URL |
 |---------|------|-----|
 | Frontend | 80 | http://localhost |
-| Backend API | 8000 | http://localhost:8000 |
+| Backend API | 9080 | http://localhost:9080 |
 | Music Assistant | 8095 | http://localhost:8095 |
 
 ## Configuration
@@ -89,7 +89,7 @@ The default FM stations are example presets for Perth, WA. You can delete these 
 3. Select **RTL-SDR Radio**
 4. Configure:
    - **Host**: `rtlsdr-backend` (or your backend IP)
-   - **Port**: `8000`
+   - **Port**: `9080`
 5. Click **Save**
 
 ### DAB+ Auto-Discovery (Optional)
@@ -150,8 +150,8 @@ data:
 
 The backend provides a REST API for all operations.
 
-- **Interactive docs**: http://localhost:8000/docs
-- **OpenAPI spec**: http://localhost:8000/openapi.json
+- **Interactive docs**: http://localhost:9080/docs
+- **OpenAPI spec**: http://localhost:9080/openapi.json
 
 Key endpoints:
 - `GET /api/stations` - List stations
@@ -166,7 +166,7 @@ The stream endpoint supports ICY (Shoutcast/Icecast) metadata for clients that r
 
 ```bash
 # Request stream with metadata
-curl -H "Icy-MetaData: 1" http://localhost:8000/api/stream
+curl -H "Icy-MetaData: 1" http://localhost:9080/api/stream
 ```
 
 When `Icy-MetaData: 1` header is present:
@@ -200,7 +200,7 @@ cd backend
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn app.main:app --host 0.0.0.0 --port 9080 --reload
 ```
 
 ### Frontend
@@ -227,7 +227,7 @@ sudo udevadm control --reload-rules
 ### Stations not appearing in Music Assistant
 
 1. Check provider is configured with correct host/port
-2. Verify backend is reachable: `curl http://localhost:8000/api/stations`
+2. Verify backend is reachable: `curl http://localhost:9080/api/stations`
 3. Trigger a library sync in MA: **Settings → Providers → RTL-SDR Radio → Sync**
 
 ### Chromecast not found

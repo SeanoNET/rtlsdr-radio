@@ -12,7 +12,7 @@ services:
       - EXTERNAL_STREAM_URL=${EXTERNAL_STREAM_URL:-}
       - DEFAULT_STATIONS=${DEFAULT_STATIONS:-all}  # Options: fm, dab, all, none
     ports:
-      - "8000:8000"
+      - "9080:9080"
       - "8089:8089"
     networks:
       - rtlsdr-dev
@@ -25,6 +25,8 @@ services:
       - backend
     ports:
       - "80:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - rtlsdr-dev
 

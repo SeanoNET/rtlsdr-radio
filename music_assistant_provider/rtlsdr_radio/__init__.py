@@ -66,7 +66,7 @@ async def get_config_entries(
             key="port",
             type=ConfigEntryType.INTEGER,
             label="API Port",
-            default_value=8000,
+            default_value=9080,
             description="Port for the RTL-SDR Radio API",
             required=True,
         ),

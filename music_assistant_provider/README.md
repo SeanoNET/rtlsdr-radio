@@ -41,7 +41,7 @@ After starting Music Assistant, add the RTL-SDR Radio provider:
 4. Select **RTL-SDR Radio**
 5. Configure the connection:
    - **Host**: `rtlsdr-backend` (default, for Docker networking)
-   - **API Port**: `8000`
+   - **API Port**: `9080`
    - **Stream Port**: `8089`
 
 ## Home Assistant Integration
@@ -120,7 +120,7 @@ docker network inspect traefik
 Verify the backend is accessible:
 
 ```bash
-docker exec music-assistant curl http://rtlsdr-backend:8000/api/health
+docker exec music-assistant curl http://rtlsdr-backend:9080/api/health
 ```
 
 ### No audio
